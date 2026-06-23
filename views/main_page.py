@@ -12,15 +12,26 @@ import streamlit as st
 from streamlit_folium import st_folium
 
 from lib.data import (
+    load_master,
     company_names,
     stores_for_company,
     filter_facilities,
     filter_company,
+    prefectures_for_company,
+    stores_for_company_prefectures,
 )
 from lib.map_builder import build_map
 from lib.zip_builder import build_png_zip
 
 logger = logging.getLogger(__name__)
+
+
+@st.cache_data(show_spinner="画像を生成中...")
+def _company_image_zip(company: str, prefectures: tuple, radius: float) -> bytes:
+    df = load_master()
+    names = stores_for_company_prefectures(df, company, list(prefectures))
+    return build_png_zip(df, names, radius)
+
 
 _FACILITY_COLORS = {"保育園": "#22C55E", "幼稚園": "#EF4444", "こども園": "#F59E0B"}
 _FALLBACK_COLOR = "#6B7280"
@@ -120,56 +131,45 @@ def render(df) -> None:
             "半径(km)", min_value=0.1, max_value=50.0, value=2.0, step=0.1
         )
 
-    # --- 企業一括ダウンロード ---
-    b1, b2 = st.columns(2)
-    with b1:
-        if company is not None:
-            csv = (
-                filter_company(df, company, radius)
-                .to_csv(index=False)
-                .encode("cp932", errors="replace")
-            )
-            csv_name = f"{company}_{radius}km.csv"
-        else:
-            csv = b""
-            csv_name = "data.csv"
-        st.download_button(
-            "企業一括データダウンロード",
-            data=csv,
-            file_name=csv_name,
-            mime="text/csv",
-            disabled=company is None,
-        )
-    with b2:
-        if st.button("企業一括画像を生成", disabled=company is None):
-            names = stores_for_company(df, company)
-            progress = st.progress(0.0)
-            cb = lambda done, total: progress.progress(done / total)
-            with st.spinner("画像ZIPを生成中..."):
-                pzip = build_png_zip(df, names, radius, progress_cb=cb)
-            st.session_state["bulk_image"] = {
-                "company": company,
-                "radius": radius,
-                "pzip": pzip,
-            }
-            logger.info(
-                "bulk image zip: company=%s radius=%.1f stores=%d",
-                company,
-                radius,
-                len(names),
-            )
-        bi = st.session_state.get("bulk_image")
-        if (
-            bi is not None
-            and company is not None
-            and bi["company"] == company
-            and bi["radius"] == radius
-        ):
+    # --- 企業一括ダウンロード（expander） ---
+    with c1:
+        with st.expander("企業一括ダウンロード", expanded=False):
+            # データ（単一CSV cp932・直接生成）
+            if company is not None:
+                _csv = (
+                    filter_company(df, company, radius)
+                    .to_csv(index=False)
+                    .encode("cp932", errors="replace")
+                )
+            else:
+                _csv = b""
             st.download_button(
-                "画像ZIPをダウンロード",
-                data=bi["pzip"],
-                file_name=f"{company}_{radius}km.zip",
+                "企業一括データダウンロード",
+                data=_csv,
+                file_name=f"{company}_{radius}km.csv" if company else "data.csv",
+                mime="text/csv",
+                disabled=company is None,
+                use_container_width=True,
+            )
+            # 画像（都道府県で絞込 → 1ボタンDL）
+            pref_opts = prefectures_for_company(df, company) if company else []
+            prefs = st.multiselect(
+                "都道府県で絞り込み", pref_opts, default=[],
+                placeholder="都道府県を選択",
+            )
+            img_disabled = company is None or not prefs
+            img_data = (
+                _company_image_zip(company, tuple(sorted(prefs)), radius)
+                if not img_disabled
+                else b""
+            )
+            st.download_button(
+                "画像をダウンロード",
+                data=img_data,
+                file_name=f"{company}_{radius}km.zip" if company else "images.zip",
                 mime="application/zip",
+                disabled=img_disabled,
+                use_container_width=True,
             )
 
     st.divider()

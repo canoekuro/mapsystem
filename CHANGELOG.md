@@ -19,6 +19,12 @@ All notable changes to this project are documented in this file.
 
 ### 2026-06-24
 
+- feat: PNG に「対象推進園数 N件」帯を追加（ヘッダー帯と地図の間。画面の並びと一致）。
+  企業一括DLを企業名称直下の折りたたみ（`st.expander`）へ集約し、画像DLは**都道府県絞り込み**
+  （選択企業で絞込・未選択時は無効＝大量DL防止）＋ `@st.cache_data` で**1ボタン**化。
+  `master.csv` に `都道府県` 列を追加。
+  [詳細](docs/history/20260624-0645-issues-2020606240638-plan.md) /
+  [結果](docs/history/20260624-0645-issues-2020606240638-result.md)
 - refactor: マルチページ（ラジオ）を廃止し**単一ページ**へ集約（`views/main_page.py`）。
   上部に企業→小売店カスケード選択＋半径、企業一括データ（cp932 CSV）/画像（ZIP）DL、
   下部に地図＋施設リスト、最下部に出典を小さく表示。店舗単位DL（旧F-02/F-03）は廃止。

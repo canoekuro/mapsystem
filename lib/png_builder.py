@@ -28,13 +28,16 @@ logger = logging.getLogger(__name__)
 CANVAS_W = 1280
 CANVAS_H = 720
 
-HEADER_H = 64               # purple band height
-MAP_SIZE = 656             # map area is 656 x 656, top-left (0, HEADER_H)
+HEADER_H = 64               # purple band (0..64)
+METRIC_H = 40               # "対象推進園数 N件" strip (64..104)
+MAP_TOP = HEADER_H + METRIC_H  # 104
+MAP_W = 656                 # map area width
+MAP_H = CANVAS_H - MAP_TOP  # 616 (map area height, top-left (0, MAP_TOP))
 
-LIST_X = MAP_SIZE          # facility list left edge (656)
+LIST_X = MAP_W             # facility list left edge (656)
 LIST_W = CANVAS_W - LIST_X  # 624
-LIST_HEADER_H = 40          # "施設リスト" band (64..104)
-LIST_TOP = HEADER_H + LIST_HEADER_H  # 104
+LIST_HEADER_H = 40          # "施設リスト" band (104..144)
+LIST_TOP = MAP_TOP + LIST_HEADER_H  # 144
 CARD_H = 56                 # card height per facility
 
 # --- Colors ----------------------------------------------------------------
@@ -75,10 +78,12 @@ def compose_canvas(
 
     Layout
     ------
-    - Header band 0..64       : purple, white 22px bold, left pad 24, v-center
-    - Map area 0..656 x 64..720 : map PNG resized to 656x656
-    - List area 656..1280 x 64..720
-        * 64..104 purple band  : centered "施設リスト"
+    - Header band 0..64        : purple, white 22px bold, left pad 24, v-center
+    - Metric strip 64..104     : white, "対象推進園数 N件" (matches the on-screen
+                                 st.metric placed between band and map)
+    - Map area 0..656 x 104..720 : map PNG resized to 656x616
+    - List area 656..1280 x 104..720
+        * 104..144 purple band : centered "施設リスト"
         * cards 56px each      : badge + name + distance + bottom rule
         * overflow             : trailing "他 N 件"
     """
@@ -100,15 +105,36 @@ def compose_canvas(
         stroke_fill=WHITE,
     )
 
-    # --- Map area (656x656, top-left at (0, HEADER_H)) ---
+    # --- Metric strip (between band and map, mirrors on-screen st.metric) ---
+    n = len(facilities_df)
+    metric_cy = HEADER_H + METRIC_H / 2
+    draw.text(
+        (24, metric_cy),
+        "対象推進園数",
+        font=_font(12),
+        fill=DIST_COLOR,
+        anchor="lm",
+    )
+    label_w = draw.textlength("対象推進園数", font=_font(12))
+    draw.text(
+        (24 + label_w + 12, metric_cy),
+        f"{n}件",
+        font=_font(20),
+        fill=NAME_COLOR,
+        anchor="lm",
+        stroke_width=1,
+        stroke_fill=NAME_COLOR,
+    )
+
+    # --- Map area (656x616, top-left at (0, MAP_TOP)) ---
     map_img = Image.open(io.BytesIO(map_png_bytes)).convert("RGB")
-    map_img = map_img.resize((MAP_SIZE, MAP_SIZE))
-    canvas.paste(map_img, (0, HEADER_H))
+    map_img = map_img.resize((MAP_W, MAP_H))
+    canvas.paste(map_img, (0, MAP_TOP))
 
     # --- List header band ("施設リスト") ---
-    draw.rectangle([LIST_X, HEADER_H, CANVAS_W, LIST_TOP], fill=PURPLE)
+    draw.rectangle([LIST_X, MAP_TOP, CANVAS_W, LIST_TOP], fill=PURPLE)
     draw.text(
-        (LIST_X + LIST_W / 2, HEADER_H + LIST_HEADER_H / 2),
+        (LIST_X + LIST_W / 2, MAP_TOP + LIST_HEADER_H / 2),
         "施設リスト",
         font=_font(16),
         fill=WHITE,
@@ -119,8 +145,8 @@ def compose_canvas(
 
     # --- Facility cards ---
     total = len(facilities_df)
-    list_height = CANVAS_H - LIST_TOP            # 616
-    max_cards = list_height // CARD_H            # 11
+    list_height = CANVAS_H - LIST_TOP            # 576
+    max_cards = list_height // CARD_H            # 10
 
     if total <= max_cards:
         draw_count = total

@@ -38,6 +38,19 @@ def stores_for_company(df: pd.DataFrame, company: str) -> list[str]:
     return sorted(df[df["企業名称"] == company]["小売店名称"].unique().tolist())
 
 
+def prefectures_for_company(df: pd.DataFrame, company: str) -> list[str]:
+    """Return unique 都道府県 for *company*, sorted ascending (image-DL filter)."""
+    return sorted(df[df["企業名称"] == company]["都道府県"].unique().tolist())
+
+
+def stores_for_company_prefectures(
+    df: pd.DataFrame, company: str, prefectures: list[str]
+) -> list[str]:
+    """Return 小売店名称 for *company* whose 都道府県 is in *prefectures*, sorted."""
+    sub = df[(df["企業名称"] == company) & (df["都道府県"].isin(prefectures))]
+    return sorted(sub["小売店名称"].unique().tolist())
+
+
 def filter_facilities(
     df: pd.DataFrame, store_name: str, radius_km: float
 ) -> pd.DataFrame:

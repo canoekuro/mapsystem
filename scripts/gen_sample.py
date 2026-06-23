@@ -37,11 +37,11 @@ COMPANIES = [
         "format": "SM",
         "stores": [
             {"code": "R001", "name": "ヨークベニマル名古屋中村店", "lat": 35.1705, "lon": 136.8816,
-             "address": "愛知県名古屋市中村区名駅南一丁目1-1"},
+             "address": "愛知県名古屋市中村区名駅南一丁目1-1", "pref": "愛知県"},
             {"code": "R002", "name": "ヨークベニマル名古屋熱田店", "lat": 35.1238, "lon": 136.8997,
-             "address": "愛知県名古屋市熱田区神宮三丁目2-5"},
-            {"code": "R003", "name": "ヨークベニマル名古屋緑店", "lat": 35.0902, "lon": 136.9731,
-             "address": "愛知県名古屋市緑区大高町字丸根1-1"},
+             "address": "愛知県名古屋市熱田区神宮三丁目2-5", "pref": "愛知県"},
+            {"code": "R003", "name": "ヨークベニマル岐阜店", "lat": 35.0902, "lon": 136.9731,
+             "address": "岐阜県岐阜市大高町字丸根1-1", "pref": "岐阜県"},
         ],
     },
     {
@@ -49,13 +49,13 @@ COMPANIES = [
         "format": "GMS",
         "stores": [
             {"code": "R004", "name": "アピタ千代田橋店", "lat": 35.1543, "lon": 136.8722,
-             "address": "愛知県名古屋市中川区千代田五丁目3-20"},
+             "address": "愛知県名古屋市中川区千代田五丁目3-20", "pref": "愛知県"},
             {"code": "R005", "name": "アピタ名古屋北店", "lat": 35.2301, "lon": 136.9218,
-             "address": "愛知県名古屋市北区楠味鋺一丁目510"},
+             "address": "愛知県名古屋市北区楠味鋺一丁目510", "pref": "愛知県"},
             {"code": "R006", "name": "アピタ長久手店", "lat": 35.1812, "lon": 137.0443,
-             "address": "愛知県長久手市砂子一丁目1101"},
-            {"code": "R007", "name": "アピタ大府店", "lat": 35.0023, "lon": 136.9694,
-             "address": "愛知県大府市江端町一丁目1"},
+             "address": "愛知県長久手市砂子一丁目1101", "pref": "愛知県"},
+            {"code": "R007", "name": "アピタ桑名店", "lat": 35.0023, "lon": 136.9694,
+             "address": "三重県桑名市江端町一丁目1", "pref": "三重県"},
         ],
     },
     {
@@ -63,11 +63,11 @@ COMPANIES = [
         "format": "GMS",
         "stores": [
             {"code": "R008", "name": "イオン名古屋茶屋店", "lat": 35.1891, "lon": 136.9502,
-             "address": "愛知県名古屋市守山区小幡中三丁目3-1"},
+             "address": "愛知県名古屋市守山区小幡中三丁目3-1", "pref": "愛知県"},
             {"code": "R009", "name": "イオン熱田店", "lat": 35.1150, "lon": 136.8882,
-             "address": "愛知県名古屋市熱田区川並町2-1"},
-            {"code": "R010", "name": "イオン春日井店", "lat": 35.2488, "lon": 136.9718,
-             "address": "愛知県春日井市柏原町一丁目1-1"},
+             "address": "愛知県名古屋市熱田区川並町2-1", "pref": "愛知県"},
+            {"code": "R010", "name": "イオン四日市店", "lat": 35.2488, "lon": 136.9718,
+             "address": "三重県四日市市柏原町一丁目1-1", "pref": "三重県"},
         ],
     },
 ]
@@ -138,6 +138,7 @@ for company_info in COMPANIES:
         store_lat = store["lat"]
         store_lon = store["lon"]
         store_address = store["address"]
+        store_pref = store["pref"]
 
         n_facilities = random.randint(14, 24)
 
@@ -171,6 +172,7 @@ for company_info in COMPANIES:
                     "業態名称": fmt,
                     "小売店コード": code,
                     "小売店名称": store_name,
+                    "都道府県": store_pref,
                     "店舗住所": store_address,
                     "店舗緯度": store_lat,
                     "店舗経度": store_lon,
