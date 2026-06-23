@@ -3,24 +3,44 @@ Data access helpers for master.csv.
 
 Functions
 ---------
-load_master()         -- cached CSV loader
-store_names(df)       -- unique store names (sorted)
-company_names(df)     -- unique company names (sorted)
-filter_facilities()   -- filter by store + radius, add 連番
-filter_company()      -- filter by company + radius (for single-file export)
-zoom_for_radius()     -- zoom level that keeps the radius circle in view
+load_master()                          -- cached CSV loader (applies column mapping)
+store_names(df)                        -- unique store names (sorted)
+company_names(df)                      -- unique company names (sorted)
+filter_facilities()                    -- filter by store + radius, add 連番
+filter_company()                       -- filter by company + radius (for single-file export)
+store_count_for_company_prefectures()  -- store count for company + prefecture selection
+zoom_for_radius()                      -- zoom level that keeps the radius circle in view
 """
 
 import math
+import tomllib
 
 import pandas as pd
 import streamlit as st
 
+_COLUMN_MAPPING_PATH = "config/column_mapping.toml"
+
+
+def _load_column_mapping() -> dict[str, str]:
+    """Load app_column_name -> csv_column_name mapping from config/column_mapping.toml."""
+    try:
+        with open(_COLUMN_MAPPING_PATH, "rb") as f:
+            data = tomllib.load(f)
+        return data.get("columns", {})
+    except FileNotFoundError:
+        return {}
+
 
 @st.cache_data
 def load_master() -> pd.DataFrame:
-    """Load data/master.csv.  Exceptions propagate to the caller (SPEC §11)."""
-    return pd.read_csv("data/master.csv")
+    """Load data/master.csv and apply column name mapping from config."""
+    df = pd.read_csv("data/master.csv")
+    mapping = _load_column_mapping()
+    # mapping: {app_name: csv_name} -> rename csv_name to app_name
+    rename = {csv_name: app_name for app_name, csv_name in mapping.items() if csv_name in df.columns}
+    if rename:
+        df = df.rename(columns=rename)
+    return df
 
 
 def store_names(df: pd.DataFrame) -> list[str]:
@@ -51,6 +71,14 @@ def stores_for_company_prefectures(
     return sorted(sub["小売店名称"].unique().tolist())
 
 
+def store_count_for_company_prefectures(
+    df: pd.DataFrame, company: str, prefectures: list[str]
+) -> int:
+    """Return the number of unique stores for *company* in *prefectures*."""
+    sub = df[(df["企業名称"] == company) & (df["都道府県"].isin(prefectures))]
+    return sub["小売店名称"].nunique()
+
+
 def filter_facilities(
     df: pd.DataFrame, store_name: str, radius_km: float
 ) -> pd.DataFrame:
@@ -67,15 +95,24 @@ def filter_facilities(
     return filtered
 
 
-def filter_company(df: pd.DataFrame, company: str, radius_km: float) -> pd.DataFrame:
+def filter_company(
+    df: pd.DataFrame,
+    company: str,
+    radius_km: float,
+    prefectures: list[str] | None = None,
+) -> pd.DataFrame:
     """
     Return all facilities for *company* within *radius_km*, for single-file export.
 
     Filters by 企業名称 and 距離 <= radius, sorted by 小売店名称 then 距離.
+    If *prefectures* is provided, also filters by 都道府県.
     No 連番 column (rows span multiple stores).  No deduplication (SPEC §4.3).
     """
+    mask = (df["企業名称"] == company) & (df["距離"] <= radius_km)
+    if prefectures:
+        mask &= df["都道府県"].isin(prefectures)
     return (
-        df[(df["企業名称"] == company) & (df["距離"] <= radius_km)]
+        df[mask]
         .sort_values(["小売店名称", "距離"])
         .reset_index(drop=True)
     )
