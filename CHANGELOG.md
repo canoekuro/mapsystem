@@ -19,6 +19,11 @@ All notable changes to this project are documented in this file.
 
 ### 2026-06-24
 
+- refactor: マルチページ（ラジオ）を廃止し**単一ページ**へ集約（`views/main_page.py`）。
+  上部に企業→小売店カスケード選択＋半径、企業一括データ（cp932 CSV）/画像（ZIP）DL、
+  下部に地図＋施設リスト、最下部に出典を小さく表示。店舗単位DL（旧F-02/F-03）は廃止。
+  [詳細](docs/history/20260624-0040-issues-202606240034-plan.md) /
+  [結果](docs/history/20260624-0040-issues-202606240034-result.md)
 - fix: 半径円が地図／PNG に表示されるよう、`zoom_for_radius` を「円がビューポートに収まる
   動的ズーム」へ変更（段階式を廃止）。
 - feat: 企業一括を「データ抽出（単一CSV cp932）」と「画像抽出（PNG ZIP）」の2画面に分割。

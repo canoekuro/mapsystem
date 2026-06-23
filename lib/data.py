@@ -33,6 +33,11 @@ def company_names(df: pd.DataFrame) -> list[str]:
     return sorted(df["企業名称"].unique().tolist())
 
 
+def stores_for_company(df: pd.DataFrame, company: str) -> list[str]:
+    """Return unique 小売店名称 for *company*, sorted ascending (cascade select)."""
+    return sorted(df[df["企業名称"] == company]["小売店名称"].unique().tolist())
+
+
 def filter_facilities(
     df: pd.DataFrame, store_name: str, radius_km: float
 ) -> pd.DataFrame:
