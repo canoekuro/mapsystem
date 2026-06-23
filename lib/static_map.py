@@ -110,7 +110,7 @@ def render_static_map(store_row, facilities_df, radius_km: float, size: int = 65
     """
     clat = float(store_row["店舗緯度"])
     clon = float(store_row["店舗経度"])
-    zoom = zoom_for_radius(radius_km)
+    zoom = zoom_for_radius(radius_km, clat, viewport_px=size)
     n_tiles = 2 ** zoom
 
     cx, cy = _project(clat, clon, zoom)

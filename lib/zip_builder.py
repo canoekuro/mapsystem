@@ -6,9 +6,6 @@ Functions
 build_png_zip(df, store_names, radius_km, progress_cb=None)
     -- ZIP of per-store composite PNGs; failing stores are skipped and
        listed in errors.txt (SPEC §11).
-
-build_csv_zip(df, store_names, radius_km, progress_cb=None)
-    -- ZIP of per-store filtered-facility CSVs (UTF-8, no index).
 """
 
 import io
@@ -82,44 +79,3 @@ def build_png_zip(
     buf.seek(0)
     return buf.getvalue()
 
-
-def build_csv_zip(
-    df: pd.DataFrame,
-    store_names: list[str],
-    radius_km: float,
-    progress_cb=None,
-) -> bytes:
-    """
-    Build a ZIP of filtered-facility CSVs, one per store (SPEC §6.2.2).
-
-    Parameters
-    ----------
-    df : pd.DataFrame
-        Full master DataFrame.
-    store_names : list[str]
-        List of 小売店名称 values to include.
-    radius_km : float
-        Search radius in kilometres.
-    progress_cb : callable or None
-        Optional callback ``progress_cb(done: int, total: int)`` invoked
-        after each store is processed.
-
-    Returns
-    -------
-    bytes
-        ZIP archive contents.
-    """
-    buf = io.BytesIO()
-    total = len(store_names)
-
-    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
-        for i, store_name in enumerate(store_names):
-            fac = filter_facilities(df, store_name, radius_km)
-            csv_bytes = fac.to_csv(index=False).encode("utf-8")
-            zf.writestr(f"{store_name}.csv", csv_bytes)
-            logger.info("build_csv_zip: added %s.csv (%d/%d)", store_name, i + 1, total)
-
-            if progress_cb is not None:
-                progress_cb(i + 1, total)
-
-    return buf.getvalue()

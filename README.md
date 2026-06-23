@@ -9,15 +9,16 @@ Web アプリケーション（Streamlit + folium / Databricks Apps 向け）。
 | ID | 画面名 | 内容 |
 |---|---|---|
 | SC-01 | 店舗周辺マップ | 店舗・半径を指定し、地図／件数／施設リストを表示。PNG・CSV ダウンロード |
-| SC-02 | 企業一括出力 | 企業・半径を指定し、全店舗の PNG／CSV を ZIP で一括出力 |
+| SC-02a | 企業一括データ抽出 | 企業・半径を指定し、絞込データを単一 CSV（cp932）で出力 |
+| SC-02b | 企業一括画像抽出 | 企業・半径を指定し、全店舗の PNG を ZIP で一括出力 |
 | SC-03 | ヘルプ | データ出典の表示 |
 
 ## ファイル構成
 
 ```
-app.py                  # エントリ。サイドバーのナビゲーション切替
-pages/                  # 画面（SC-01/02/03、各 render(df) を公開）
-lib/data.py             # マスタロード・絞込（SPEC §8）
+app.py                  # エントリ。サイドバーのラジオで画面切替
+views/                  # 画面（各 render(df) を公開。pages/ は使わず自動ナビを回避）
+lib/data.py             # マスタロード・絞込・ズーム算出（SPEC §8）
 lib/map_builder.py      # folium.Map 生成（画面内の対話地図、SPEC §6.1.2）
 lib/static_map.py       # ブラウザレス静的地図生成（OSMタイル+Pillow、PNG用）
 lib/png_builder.py      # PNG 合成（Pillow、SPEC §8.3）

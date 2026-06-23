@@ -65,7 +65,7 @@ def build_map(store_row, facilities_df, radius_km: float) -> folium.Map:
     # --- 1. Map base ---
     m = folium.Map(
         location=[lat, lon],
-        zoom_start=zoom_for_radius(radius_km),
+        zoom_start=zoom_for_radius(radius_km, lat, viewport_px=560),
         tiles="OpenStreetMap",
         width=700,
         height=560,

@@ -16,3 +16,14 @@ All notable changes to this project are documented in this file.
   [結果](docs/history/20260623-235500-databricks-deploy-png-browserless-result.md)
 - build: Databricks Apps へデプロイ（アプリ名 `mapsystem`）。`app.yaml` をランタイム仕様に
   修正（`${VAR}` 非展開を回避し、ポートはランタイム自動注入・設定は env 化）。
+
+### 2026-06-24
+
+- fix: 半径円が地図／PNG に表示されるよう、`zoom_for_radius` を「円がビューポートに収まる
+  動的ズーム」へ変更（段階式を廃止）。
+- feat: 企業一括を「データ抽出（単一CSV cp932）」と「画像抽出（PNG ZIP）」の2画面に分割。
+  店舗ごとCSVのZIP（`build_csv_zip`）は廃止。
+- refactor: Streamlit 自動マルチページ回避のため画面を `pages/` から `views/` へ移設し、
+  サイドバーのナビをラジオのみに統一。
+  [詳細](docs/history/20260624-0030-issues-202606240011-plan.md) /
+  [結果](docs/history/20260624-0030-issues-202606240011-result.md)

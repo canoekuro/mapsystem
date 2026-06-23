@@ -70,10 +70,13 @@
 | ID | 画面名 | サイドバーナビゲーション表示名 |
 |---|---|---|
 | SC-01 | マップ画面（個別） | 店舗周辺マップ |
-| SC-02 | マップ画面（企業一括） | 企業一括出力 |
+| SC-02a | マップ画面（企業一括データ抽出） | 企業一括データ抽出 |
+| SC-02b | マップ画面（企業一括画像抽出） | 企業一括画像抽出 |
 | SC-03 | ヘルプ画面 | ヘルプ |
 
-`st.sidebar.radio` で画面切替を行う。
+`st.sidebar.radio` で画面切替を行う。Streamlit の自動マルチページ機能を使わないため、
+画面モジュールは `pages/` ではなく `views/` に配置する（`pages/` だと自動ページ一覧が
+サイドバーに表示され紛らわしいため）。
 
 ## 6. 画面詳細
 
@@ -115,12 +118,11 @@ Streamlit カラム比率: `st.columns([2, 1])` で左:地図、右:施設リス
 
 - folium.Map 仕様
   - `location=[店舗緯度, 店舗経度]`
-  - `zoom_start`: 半径から自動算出（下記式）
-    - radius<=1 → 16
-    - 1<radius<=2 → 15
-    - 2<radius<=5 → 14
-    - 5<radius<=10 → 13
-    - 10< → 12
+  - `zoom_start`: 指定半径の円がビューポート内に収まるよう動的算出する。
+    Web Mercator の解像度 `mpp = 156543.03392 * cos(緯度) / 2^z` を用い、円の直径
+    `2 × radius_km × 1000`(m) がビューポート幅の約 80% に収まる最大ズームを採用する
+    （`z = floor(log2(0.8 × viewport_px × 156543.03392 × cos(緯度) / 直径m))`、0〜19 にクランプ）。
+    旧来の段階式（radius≤1→16 等）はズーム過大で半径円が画面外に出るため廃止。
   - `tiles="OpenStreetMap"`
   - サイズ: `width=700`, `height=560`
 - 円（半径）
@@ -174,31 +176,33 @@ Streamlit カラム比率: `st.columns([2, 1])` で左:地図、右:施設リス
 - `st.download_button("画像をダウンロード", data=png_bytes, file_name=f"{小売店名称}.png", mime="image/png")`
 - `st.download_button("データをダウンロード", data=csv_bytes, file_name=f"{小売店名称}_{半径}km.csv", mime="text/csv")`
 
-### 6.2 SC-02 マップ画面（企業一括）
+### 6.2 SC-02a / SC-02b マップ画面（企業一括）
 
-#### 6.2.1 サイドバー入力
+企業一括は「データ抽出」と「画像抽出」の2画面に分割する。両画面のサイドバーは共通で、
+企業名称 `st.sidebar.selectbox`（`企業名称` ユニーク値・昇順）と 半径(km)
+`st.sidebar.number_input`（SC-01 と同一）を持つ。メインエリア上部に紫帯ヘッダーバー、
+対象店舗一覧テーブル（`st.dataframe`、カラム: 小売店コード、小売店名称、対象推進園数）を表示する。
 
-- 企業名称: `st.sidebar.selectbox`（`master.csv` の `企業名称` ユニーク値、昇順）
-- 半径(km): `st.sidebar.number_input`（仕様は SC-01 と同一）
-- 実行ボタン: `st.sidebar.button("ZIP生成")`
+#### 6.2a SC-02a 企業一括データ抽出
 
-#### 6.2.2 メインエリア
+- 実行ボタン: `st.sidebar.button("データ抽出")`
+- ヘッダー文言: `{企業名称} 一括データ抽出 ｜ 半径{半径}km圏内`
+- 出力: 対象企業＋半径で絞り込んだデータを **1つのCSVファイル**で出力する（店舗ごとの
+  分割・ZIP は行わない）。
+  - エンコーディング: **cp932**（Excel 互換。`to_csv(index=False).encode("cp932", errors="replace")`）
+  - 内容: `企業名称==指定企業 かつ 距離<=半径` の全行を `小売店名称`・`距離` 昇順で出力
+  - ファイル名: `{企業名称}_{半径}km.csv`
+  - ボタン: `st.download_button("データをダウンロード", data=csv_bytes, file_name=..., mime="text/csv")`
 
-- 上部ヘッダーバー（紫帯、SC-01 と同様）
-  - 文言: `{企業名称} 一括出力 ｜ 半径{半径}km圏内`
-- 対象店舗一覧テーブル（`st.dataframe`）
-  - カラム: 小売店コード、小売店名称、対象推進園数
+#### 6.2b SC-02b 企業一括画像抽出
+
+- 実行ボタン: `st.sidebar.button("画像抽出")`
+- ヘッダー文言: `{企業名称} 一括画像抽出 ｜ 半径{半径}km圏内`
 - 進捗バー: `st.progress`
-- ZIP生成ロジック
-  - 対象企業に属する全店舗（小売店コードのユニーク件数）について SC-01 と同一描画ロジックでPNGを生成
+- 出力: 対象企業に属する全店舗について SC-01 と同一描画ロジックでPNGを生成し ZIP にまとめる
   - 1ファイル名: `{小売店名称}.png`
   - ZIPファイル名: `{企業名称}_{半径}km.zip`
-- 完了後ボタン
-  - `st.download_button("ZIPをダウンロード", data=zip_bytes, file_name=..., mime="application/zip")`
-- 同時にデータZIPボタンも配置
-  - 各店舗の対象データCSVをまとめたZIP
-  - ZIPファイル名: `{企業名称}_{半径}km_data.zip`
-  - 内部ファイル名: `{小売店名称}.csv`
+  - ボタン: `st.download_button("ZIPをダウンロード", data=zip_bytes, file_name=..., mime="application/zip")`
 
 ### 6.3 SC-03 ヘルプ画面
 
@@ -226,7 +230,7 @@ jageocoder 用住所データベース（住居表示レベル）を利用
 | F-02 | 店舗単位画像ダウンロード | F-01 の表示状態 | `{小売店名称}.png` |
 | F-03 | 店舗単位データダウンロード | F-01 の表示状態 | `{小売店名称}_{半径}km.csv` |
 | F-04 | 企業単位画像一括ダウンロード | 企業名称、半径(km) | `{企業名称}_{半径}km.zip`（中身: 店舗ごとのPNG） |
-| F-05 | 企業単位データ一括ダウンロード | 企業名称、半径(km) | `{企業名称}_{半径}km_data.zip`（中身: 店舗ごとのCSV） |
+| F-05 | 企業単位データ一括ダウンロード | 企業名称、半径(km) | `{企業名称}_{半径}km.csv`（単一CSV、cp932、企業＋半径で絞込） |
 | F-06 | ヘルプ表示 | なし | データ出典の固定文言表示 |
 
 ## 8. データ処理仕様
@@ -311,21 +315,23 @@ buf.seek(0)
 ```
 /
 ├ app.py                  # エントリ。ナビゲーション切替のみ
-├ pages/
+├ views/                  # 画面（pages/ は使わない＝自動マルチページ回避）
 │  ├ map_single.py        # SC-01
-│  ├ map_bulk.py          # SC-02
+│  ├ bulk_data.py         # SC-02a 企業一括データ抽出（単一CSV cp932）
+│  ├ bulk_image.py        # SC-02b 企業一括画像抽出（画像ZIP）
 │  └ help.py              # SC-03
 ├ lib/
-│  ├ data.py              # マスタロード、絞込
-│  ├ map_builder.py       # folium.Map 生成
+│  ├ data.py              # マスタロード、絞込、ズーム算出
+│  ├ map_builder.py       # folium.Map 生成（画面内の対話地図）
+│  ├ static_map.py        # ブラウザレス静的地図生成（PNG用、OSMタイル+Pillow）
 │  ├ png_builder.py       # PNG 合成（Pillow）
-│  └ zip_builder.py       # ZIP 生成
+│  └ zip_builder.py       # 画像ZIP 生成
 ├ data/
 │  └ master.csv
 ├ fonts/
 │  └ ipaexg.ttf
 ├ requirements.txt
-└ app.yaml                # Databricks Apps 用設定（Chromium インストールを含む）
+└ app.yaml                # Databricks Apps 用設定
 ```
 
 ## 10. 非機能要件
@@ -348,10 +354,11 @@ buf.seek(0)
 
 ## 12. 受入条件
 
-- [ ] SC-01 で店舗・半径を指定して地図と施設リストが表示される
+- [ ] SC-01 で店舗・半径を指定して地図と施設リストが表示される（指定半径の円が地図内に収まる）
 - [ ] SC-01 から `{店舗名}.png`（ヘッダー＋地図＋施設リスト合成）がダウンロードできる
 - [ ] SC-01 から `{店舗名}_{半径}km.csv` がダウンロードできる
-- [ ] SC-02 で企業・半径を指定して全店舗PNGがZIPでダウンロードできる
-- [ ] SC-02 で全店舗CSVがZIPでダウンロードできる
+- [ ] SC-02a で企業・半径を指定して単一CSV（cp932）`{企業名称}_{半径}km.csv` がダウンロードできる
+- [ ] SC-02b で企業・半径を指定して全店舗PNGがZIP `{企業名称}_{半径}km.zip` でダウンロードできる
 - [ ] SC-03 で出典文言が表示される
+- [ ] サイドバーがラジオのみで切替わる（自動ページ一覧が出ない）
 - [ ] Databricks Apps 上で起動・操作できる
