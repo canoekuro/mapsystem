@@ -212,6 +212,13 @@ def render(df) -> None:
     else:
         srow = df[df["小売店名称"] == store].iloc[0]
         fac = filter_facilities(df, store, radius)
+
+        # マップを誤って操作した場合に初期表示へ戻すリセット（紫帯の上に配置）。
+        # st_folium の key を変えると再マウントされ、build_map の初期位置/ズームに戻る。
+        if st.button("マップをリセット", key="reset_map"):
+            st.session_state["map_nonce"] = st.session_state.get("map_nonce", 0) + 1
+        nonce = st.session_state.get("map_nonce", 0)
+
         st.markdown(_header_html(store, radius), unsafe_allow_html=True)
         n = len(fac)
         if n == 0:
@@ -219,11 +226,6 @@ def render(df) -> None:
         st.metric("対象推進園数", f"{n}件")
         col_map, col_list = st.columns([2, 1])
         with col_map:
-            # マップを誤って操作した場合に初期表示へ戻すリセット。
-            # st_folium の key を変えると再マウントされ、build_map の初期位置/ズームに戻る。
-            if st.button("マップをリセット", key="reset_map"):
-                st.session_state["map_nonce"] = st.session_state.get("map_nonce", 0) + 1
-            nonce = st.session_state.get("map_nonce", 0)
             st_folium(
                 build_map(srow, fac, radius),
                 width=700,
