@@ -1,0 +1,19 @@
+# Python
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# OS / editor
+.DS_Store
+
+# Local agent / IDE / tooling caches (environment-level, not app-specific)
+.claude/
+.codex/
+.cursor/
+.vscode/
+.tools/
+.ai-dev-kit/
+
+# Large vendor skill mirror (not app-specific; governance lives in rules/workflows)
+.agents/skills/
