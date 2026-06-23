@@ -19,6 +19,11 @@ All notable changes to this project are documented in this file.
 
 ### 2026-06-24
 
+- feat: 企業一括ダウンロードの並びを「データダウンロード → 都道府県で絞り込み → 画像をダウンロード」
+  に変更し、データボタン名を「データダウンロード」に。地図に「マップをリセット」ボタンを追加
+  （誤操作時に初期表示へ復帰）。
+  [詳細](docs/history/20260624-0800-issues-ui-tweaks-plan.md) /
+  [結果](docs/history/20260624-0800-issues-ui-tweaks-result.md)
 - feat: PNG に「対象推進園数 N件」帯を追加（ヘッダー帯と地図の間。画面の並びと一致）。
   企業一括DLを企業名称直下の折りたたみ（`st.expander`）へ集約し、画像DLは**都道府県絞り込み**
   （選択企業で絞込・未選択時は無効＝大量DL防止）＋ `@st.cache_data` で**1ボタン**化。

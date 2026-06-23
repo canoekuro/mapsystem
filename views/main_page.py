@@ -135,16 +135,23 @@ def render(df) -> None:
     # --- 企業一括ダウンロード（expander） ---
     with c1:
         with st.expander("企業一括ダウンロード", expanded=False):
-            # 都道府県で絞り込み（先に表示）
-            pref_opts = prefectures_for_company(df, company) if company else []
-            prefs = st.multiselect(
-                "都道府県で絞り込み", pref_opts, default=[],
-                placeholder="都道府県を選択",
-                disabled=company is None,
-            )
-            if prefs:
-                count = store_count_for_company_prefectures(df, company, prefs)
-                st.caption(f"選択中の都道府県: {count}件の店舗")
+            # 表示順: データダウンロード → 都道府県で絞り込み → 画像をダウンロード。
+            # データ/画像は都道府県の選択値を使うため、コンテナで表示位置を固定しつつ
+            # 先に都道府県を読み取る。
+            data_box = st.container()
+            pref_box = st.container()
+            image_box = st.container()
+
+            with pref_box:
+                pref_opts = prefectures_for_company(df, company) if company else []
+                prefs = st.multiselect(
+                    "都道府県で絞り込み", pref_opts, default=[],
+                    placeholder="都道府県を選択",
+                    disabled=company is None,
+                )
+                if prefs:
+                    count = store_count_for_company_prefectures(df, company, prefs)
+                    st.caption(f"選択中の都道府県: {count}件の店舗")
 
             # ファイル名に都道府県を付加
             pref_label = "_".join(sorted(prefs)) if prefs else ""
@@ -161,39 +168,41 @@ def render(df) -> None:
                 else "images.zip"
             )
 
-            # データ（単一CSV cp932・直接生成）
-            if company is not None:
-                _csv = (
-                    filter_company(df, company, radius, prefectures=prefs if prefs else None)
-                    .to_csv(index=False)
-                    .encode("cp932", errors="replace")
+            # データダウンロード（単一CSV cp932・直接生成、都道府県選択時は絞込）
+            with data_box:
+                if company is not None:
+                    _csv = (
+                        filter_company(df, company, radius, prefectures=prefs if prefs else None)
+                        .to_csv(index=False)
+                        .encode("cp932", errors="replace")
+                    )
+                else:
+                    _csv = b""
+                st.download_button(
+                    "データダウンロード",
+                    data=_csv,
+                    file_name=csv_filename,
+                    mime="text/csv",
+                    disabled=company is None,
+                    use_container_width=True,
                 )
-            else:
-                _csv = b""
-            st.download_button(
-                "企業一括データダウンロード",
-                data=_csv,
-                file_name=csv_filename,
-                mime="text/csv",
-                disabled=company is None,
-                use_container_width=True,
-            )
 
-            # 画像（都道府県で絞込 → 1ボタンDL）
-            img_disabled = company is None or not prefs
-            img_data = (
-                _company_image_zip(company, tuple(sorted(prefs)), radius)
-                if not img_disabled
-                else b""
-            )
-            st.download_button(
-                "画像をダウンロード",
-                data=img_data,
-                file_name=zip_filename,
-                mime="application/zip",
-                disabled=img_disabled,
-                use_container_width=True,
-            )
+            # 画像をダウンロード（都道府県で絞込 → 1ボタンDL）
+            with image_box:
+                img_disabled = company is None or not prefs
+                img_data = (
+                    _company_image_zip(company, tuple(sorted(prefs)), radius)
+                    if not img_disabled
+                    else b""
+                )
+                st.download_button(
+                    "画像をダウンロード",
+                    data=img_data,
+                    file_name=zip_filename,
+                    mime="application/zip",
+                    disabled=img_disabled,
+                    use_container_width=True,
+                )
 
     st.divider()
 
@@ -210,7 +219,17 @@ def render(df) -> None:
         st.metric("対象推進園数", f"{n}件")
         col_map, col_list = st.columns([2, 1])
         with col_map:
-            st_folium(build_map(srow, fac, radius), width=700, height=560)
+            # マップを誤って操作した場合に初期表示へ戻すリセット。
+            # st_folium の key を変えると再マウントされ、build_map の初期位置/ズームに戻る。
+            if st.button("マップをリセット", key="reset_map"):
+                st.session_state["map_nonce"] = st.session_state.get("map_nonce", 0) + 1
+            nonce = st.session_state.get("map_nonce", 0)
+            st_folium(
+                build_map(srow, fac, radius),
+                width=700,
+                height=560,
+                key=f"map_{store}_{radius}_{nonce}",
+            )
         with col_list:
             st.markdown(_facility_list_html(fac), unsafe_allow_html=True)
 
