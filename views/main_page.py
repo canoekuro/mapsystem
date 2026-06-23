@@ -19,6 +19,7 @@ from lib.data import (
     filter_company,
     prefectures_for_company,
     stores_for_company_prefectures,
+    store_count_for_company_prefectures,
 )
 from lib.map_builder import build_map
 from lib.zip_builder import build_png_zip
@@ -134,10 +135,36 @@ def render(df) -> None:
     # --- 企業一括ダウンロード（expander） ---
     with c1:
         with st.expander("企業一括ダウンロード", expanded=False):
+            # 都道府県で絞り込み（先に表示）
+            pref_opts = prefectures_for_company(df, company) if company else []
+            prefs = st.multiselect(
+                "都道府県で絞り込み", pref_opts, default=[],
+                placeholder="都道府県を選択",
+                disabled=company is None,
+            )
+            if prefs:
+                count = store_count_for_company_prefectures(df, company, prefs)
+                st.caption(f"選択中の都道府県: {count}件の店舗")
+
+            # ファイル名に都道府県を付加
+            pref_label = "_".join(sorted(prefs)) if prefs else ""
+            csv_filename = (
+                f"{company}_{pref_label}_{radius}km.csv"
+                if company and pref_label
+                else f"{company}_{radius}km.csv" if company
+                else "data.csv"
+            )
+            zip_filename = (
+                f"{company}_{pref_label}_{radius}km.zip"
+                if company and pref_label
+                else f"{company}_{radius}km.zip" if company
+                else "images.zip"
+            )
+
             # データ（単一CSV cp932・直接生成）
             if company is not None:
                 _csv = (
-                    filter_company(df, company, radius)
+                    filter_company(df, company, radius, prefectures=prefs if prefs else None)
                     .to_csv(index=False)
                     .encode("cp932", errors="replace")
                 )
@@ -146,17 +173,13 @@ def render(df) -> None:
             st.download_button(
                 "企業一括データダウンロード",
                 data=_csv,
-                file_name=f"{company}_{radius}km.csv" if company else "data.csv",
+                file_name=csv_filename,
                 mime="text/csv",
                 disabled=company is None,
                 use_container_width=True,
             )
+
             # 画像（都道府県で絞込 → 1ボタンDL）
-            pref_opts = prefectures_for_company(df, company) if company else []
-            prefs = st.multiselect(
-                "都道府県で絞り込み", pref_opts, default=[],
-                placeholder="都道府県を選択",
-            )
             img_disabled = company is None or not prefs
             img_data = (
                 _company_image_zip(company, tuple(sorted(prefs)), radius)
@@ -166,7 +189,7 @@ def render(df) -> None:
             st.download_button(
                 "画像をダウンロード",
                 data=img_data,
-                file_name=f"{company}_{radius}km.zip" if company else "images.zip",
+                file_name=zip_filename,
                 mime="application/zip",
                 disabled=img_disabled,
                 use_container_width=True,
