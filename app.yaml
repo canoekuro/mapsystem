@@ -1,30 +1,30 @@
 # Databricks Apps 設定（SPEC §2 / §3）
 #
-# 起動エントリは app.py（Streamlit）。Databricks Apps は本ファイルの command を
-# 実行する。ポートは Databricks 側が割り当てる環境変数を尊重しつつ既定 8000 に束ねる。
+# 起動エントリは app.py（Streamlit）。Databricks Apps はポートを動的割当するため
+# DATABRICKS_APP_PORT を使用し、ホストは 0.0.0.0 に束ねる（502 回避）。
+# Streamlit の CORS / XSRF はリバースプロキシ構成のため無効化が必須。
 #
-# 【Chromium 依存について（SPEC §3, 既知リスク）】
-# PNG 合成（lib/png_builder._map_to_png）は selenium + ヘッドレス Chrome を用いる。
-# selenium 4 の Selenium Manager が chromedriver を解決するが、Chrome/Chromium の
-# ブラウザ本体はランタイムに存在する必要がある。Databricks Apps の標準ランタイムに
-# Chromium が含まれない場合、PNG／ZIP（画像）機能は動作しない。
-# その場合は以下のいずれかで Chromium 本体を供給すること:
-#   - ベースイメージ/ビルド手順で chromium をインストールする
-#   - 事前同梱した Chromium バイナリのパスを CHROME_BIN で指定する
-# 詳細は README.md の「デプロイ時の留意事項」を参照。
+# 【既知の制約】PNG 合成（lib/png_builder._map_to_png）は selenium + ヘッドレス Chrome に
+# 依存する。Databricks Apps は root 権限が無く Chromium を導入できないため、本環境では
+# PNG／画像ZIP は動作しない（地図表示・施設リスト・CSV/データZIP・ヘルプは動作）。
+# ブラウザレスな PNG 生成への置換を別途計画済み。
 
+# Databricks はコマンドをシェルで実行しないため ${VAR} 展開は不可。ポートはランタイムが
+# Streamlit 向けに自動注入する（STREAMLIT_SERVER_PORT=DATABRICKS_APP_PORT）。よって
+# --server.port は指定せず、その他の設定は env（リテラル値）で行う。
 command:
   - streamlit
   - run
   - app.py
-  - --server.port
-  - "8000"
-  - --server.address
-  - "0.0.0.0"
-  - --server.headless
-  - "true"
 
 env:
-  # Selenium にヘッドレス用の Chrome バイナリ位置を伝える（環境に応じて調整）。
-  - name: CHROME_BIN
-    value: "/usr/bin/chromium"
+  - name: STREAMLIT_SERVER_ADDRESS
+    value: "0.0.0.0"
+  - name: STREAMLIT_SERVER_HEADLESS
+    value: "true"
+  - name: STREAMLIT_SERVER_ENABLE_CORS
+    value: "false"
+  - name: STREAMLIT_SERVER_ENABLE_XSRF_PROTECTION
+    value: "false"
+  - name: STREAMLIT_BROWSER_GATHER_USAGE_STATS
+    value: "false"

@@ -2,29 +2,25 @@
 PNG composition for mapsystem (SPEC §8.3).
 
 The downloaded PNG is a single 1280x720 image combining the purple header
-band, the folium map, and the facility list.  folium's native ``_to_png``
-only renders the map area, so the rest is composed with Pillow.
+band, the map, and the facility list, composed with Pillow.
 
-Design
-------
-Acquisition and composition are kept separate so the (hard to run) headless
-browser step is isolated and the composition is a pure, locally testable
-function:
+The map image is rendered browserlessly by ``lib.static_map`` (pure-Python
+OSM tiles), so this works on Databricks Apps where no browser can be
+installed.  Map acquisition and composition stay separate so the composition
+is a pure, locally testable function:
 
-    _map_to_png(m)              -- folium.Map -> map-only PNG bytes (selenium)
+    render_static_map(...)      -- store -> map-only PNG bytes (lib.static_map)
     compose_canvas(map_png, ..) -- pure: map PNG bytes -> composite PNG bytes
-    build_png(...)             -- _map_to_png(build_map(...)) -> compose_canvas
+    build_png(...)              -- compose_canvas(render_static_map(...), ...)
 """
 
 import io
 import logging
 import os
-import tempfile
-import time
 
 from PIL import Image, ImageDraw, ImageFont
 
-from lib.map_builder import build_map
+from lib.static_map import render_static_map
 
 logger = logging.getLogger(__name__)
 
@@ -66,46 +62,6 @@ def _font(size: int) -> ImageFont.FreeTypeFont:
     if size not in _font_cache:
         _font_cache[size] = ImageFont.truetype(_FONT_PATH, size)
     return _font_cache[size]
-
-
-def _map_to_png(m, delay: int = 3) -> bytes:
-    """
-    Render *m* (folium.Map) to a map-only PNG using headless Chrome.
-
-    Uses selenium directly (selenium 4 Selenium Manager resolves the driver)
-    with container-safe Chrome flags.  Requires a Chrome/Chromium binary and
-    network access to the tile host; on Databricks Apps these come from
-    app.yaml.  Exceptions propagate to the caller (SPEC §11).
-    """
-    from selenium import webdriver
-    from selenium.webdriver.chrome.options import Options
-
-    html = m.get_root().render()
-    opts = Options()
-    opts.add_argument("--headless=new")
-    opts.add_argument("--no-sandbox")
-    opts.add_argument("--disable-dev-shm-usage")
-    opts.add_argument("--hide-scrollbars")
-    opts.add_argument("--window-size=720,620")
-
-    driver = webdriver.Chrome(options=opts)
-    path = None
-    try:
-        with tempfile.NamedTemporaryFile(
-            "w", suffix=".html", delete=False, encoding="utf-8"
-        ) as f:
-            f.write(html)
-            path = f.name
-        driver.get("file://" + path)
-        time.sleep(delay)
-        return driver.get_screenshot_as_png()
-    finally:
-        driver.quit()
-        if path:
-            try:
-                os.unlink(path)
-            except OSError:
-                pass
 
 
 def compose_canvas(
@@ -247,9 +203,9 @@ def build_png(store_row, facilities_df, radius_km: float) -> bytes:
     """
     Build the composite PNG for one store (SPEC §8.3 full path).
 
-    Renders the folium map via headless Chrome, then composes the canvas.
-    Exceptions propagate so callers can skip failing stores (SPEC §11).
+    Renders the map browserlessly (pure-Python OSM tiles via lib.static_map),
+    then composes the canvas.  Exceptions propagate so callers can skip
+    failing stores (SPEC §11).
     """
-    m = build_map(store_row, facilities_df, radius_km)
-    map_png = _map_to_png(m)
+    map_png = render_static_map(store_row, facilities_df, radius_km)
     return compose_canvas(map_png, store_row, facilities_df, radius_km)
