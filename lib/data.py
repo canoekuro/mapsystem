@@ -1,9 +1,9 @@
 """
-Data access helpers for master.csv.
+Data access helpers — reads master data from Databricks Unity Catalog.
 
 Functions
 ---------
-load_master()                          -- cached CSV loader (applies column mapping)
+load_master()                          -- cached table loader (applies column mapping)
 store_names(df)                        -- unique store names (sorted)
 company_names(df)                      -- unique company names (sorted)
 filter_facilities()                    -- filter by store + radius, add 連番
@@ -19,10 +19,11 @@ import pandas as pd
 import streamlit as st
 
 _COLUMN_MAPPING_PATH = "config/column_mapping.toml"
+_DATABRICKS_CONFIG_PATH = "config/databricks_config.toml"
 
 
 def _load_column_mapping() -> dict[str, str]:
-    """Load app_column_name -> csv_column_name mapping from config/column_mapping.toml."""
+    """Load app_column_name -> table_column_name mapping from config/column_mapping.toml."""
     try:
         with open(_COLUMN_MAPPING_PATH, "rb") as f:
             data = tomllib.load(f)
@@ -31,13 +32,31 @@ def _load_column_mapping() -> dict[str, str]:
         return {}
 
 
+def _load_databricks_config() -> dict:
+    """Load Databricks connection config from config/databricks_config.toml."""
+    try:
+        with open(_DATABRICKS_CONFIG_PATH, "rb") as f:
+            data = tomllib.load(f)
+        return data.get("databricks", {})
+    except FileNotFoundError:
+        return {}
+
+
 @st.cache_data
 def load_master() -> pd.DataFrame:
-    """Load data/master.csv and apply column name mapping from config."""
-    df = pd.read_csv("data/master.csv")
+    """Load master table from Databricks Unity Catalog and apply column name mapping."""
+    from databricks.connect import DatabricksSession  # noqa: PLC0415
+
+    config = _load_databricks_config()
+    # TODO: config/databricks_config.toml の table キーに実際のテーブル名を設定してください
+    table_name = config.get("table", "catalog.schema.table_name")
+
+    spark = DatabricksSession.builder.getOrCreate()
+    df = spark.table(table_name).toPandas()
+
     mapping = _load_column_mapping()
-    # mapping: {app_name: csv_name} -> rename csv_name to app_name
-    rename = {csv_name: app_name for app_name, csv_name in mapping.items() if csv_name in df.columns}
+    # mapping: {app_name: col_name} -> rename col_name to app_name
+    rename = {col_name: app_name for app_name, col_name in mapping.items() if col_name in df.columns}
     if rename:
         df = df.rename(columns=rename)
     return df

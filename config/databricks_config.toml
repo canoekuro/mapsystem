@@ -1,0 +1,11 @@
+# Databricks Unity Catalog テーブル設定
+#
+# table に参照先テーブルを 3 パート名（catalog.schema.table）で指定してください。
+# 例: main.retail.master
+#
+# Databricks Apps 上では DatabricksSession が自動的にクレデンシャルを取得します。
+# ローカル開発時は ~/.databrickscfg または環境変数（DATABRICKS_HOST / DATABRICKS_TOKEN）を設定してください。
+
+[databricks]
+# TODO: 実際のテーブル名に変更してください
+table = "catalog.schema.table_name"

@@ -4,6 +4,14 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+### 2026-06-25
+
+- feat: データソースをローカル `data/master.csv` から Databricks Unity Catalog テーブルへ移行。
+  `DatabricksSession.builder.getOrCreate()` + `spark.table()` による読み込みに変更し、
+  テーブル名は `config/databricks_config.toml` で管理。大規模データへの対応強化。
+  [詳細](docs/history/20260625-0900-volume-table-reference-plan.md) /
+  [結果](docs/history/20260625-0900-volume-table-reference-result.md)
+
 ### 2026-06-23
 
 - feat: SPEC v1.0 準拠のマップアプリ（Streamlit + folium、Databricks Apps 向け）を新規構築。
