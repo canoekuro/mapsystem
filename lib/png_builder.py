@@ -87,7 +87,7 @@ def compose_canvas(
         * cards 56px each      : badge + name + distance + bottom rule
         * overflow             : trailing "他 N 件"
     """
-    store_name = store_row["小売店名称"]
+    store_name = store_row["店舗名称"]
 
     canvas = Image.new("RGB", (CANVAS_W, CANVAS_H), WHITE)
     draw = ImageDraw.Draw(canvas)
@@ -169,7 +169,7 @@ def compose_canvas(
         top = LIST_TOP + i * CARD_H
         cy = top + CARD_H / 2
 
-        color = _FACILITY_COLORS.get(row["施設区分"], _FALLBACK_COLOR)
+        color = _FACILITY_COLORS.get(row["推進園区分"], _FALLBACK_COLOR)
         number = int(row["連番"])
 
         # number badge (filled circle)
@@ -186,8 +186,8 @@ def compose_canvas(
         )
 
         # facility name (bold) + distance (muted)
-        name = str(row["施設名称"])
-        distance_text = f"約{row['距離']}km"
+        name = str(row["推進園名称"])
+        distance_text = f"約{row['距離km']}km"
         draw.text(
             (text_x, cy - 9),
             name,

@@ -11,7 +11,7 @@ from folium.plugins import BeautifyIcon
 
 from lib.data import zoom_for_radius
 
-# Color mapping by 施設区分 (SPEC §6.1.2)
+# Color mapping by 推進園区分 (SPEC §6.1.2)
 _FACILITY_COLORS: dict[str, str] = {
     "保育園": "#22C55E",
     "幼稚園": "#EF4444",
@@ -47,10 +47,10 @@ def build_map(store_row, facilities_df, radius_km: float) -> folium.Map:
     Parameters
     ----------
     store_row : pandas.Series
-        One row from master.csv.  Must contain 店舗緯度, 店舗経度, 小売店名称.
+        One row from master.csv.  Must contain 店舗lat, 店舗lon, 店舗名称.
     facilities_df : pandas.DataFrame
         Output of lib.data.filter_facilities (distance-sorted, with 連番 column).
-        Must contain 施設緯度, 施設経度, 施設名称, 施設区分, 距離, 連番.
+        Must contain 推進園lat, 推進園lon, 推進園名称, 推進園区分, 距離km, 連番.
     radius_km : float
         Search radius in km.
 
@@ -58,9 +58,9 @@ def build_map(store_row, facilities_df, radius_km: float) -> folium.Map:
     -------
     folium.Map
     """
-    lat = store_row["店舗緯度"]
-    lon = store_row["店舗経度"]
-    store_name = store_row["小売店名称"]
+    lat = store_row["店舗lat"]
+    lon = store_row["店舗lon"]
+    store_name = store_row["店舗名称"]
 
     # --- 1. Map base ---
     m = folium.Map(
@@ -92,11 +92,11 @@ def build_map(store_row, facilities_df, radius_km: float) -> folium.Map:
 
     # --- 4. Facility markers (SPEC §6.1.2) ---
     for _, row in facilities_df.iterrows():
-        category = row["施設区分"]
+        category = row["推進園区分"]
         bg_color = _FACILITY_COLORS.get(category, _FALLBACK_COLOR)
         number = int(row["連番"])
-        distance = row["距離"]
-        facility_name = row["施設名称"]
+        distance = row["距離km"]
+        facility_name = row["推進園名称"]
 
         icon = BeautifyIcon(
             icon_shape="circle",
@@ -106,7 +106,7 @@ def build_map(store_row, facilities_df, radius_km: float) -> folium.Map:
             text_color="#FFFFFF",
         )
         folium.Marker(
-            location=[row["施設緯度"], row["施設経度"]],
+            location=[row["推進園lat"], row["推進園lon"]],
             tooltip=f"{number}. {facility_name}（{distance}km）",
             icon=icon,
         ).add_to(m)

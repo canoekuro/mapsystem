@@ -34,7 +34,7 @@ def build_png_zip(
     df : pd.DataFrame
         Full master DataFrame.
     store_names : list[str]
-        List of 小売店名称 values to include.
+        List of 店舗名称 values to include.
     radius_km : float
         Search radius in kilometres.
     progress_cb : callable or None
@@ -55,7 +55,7 @@ def build_png_zip(
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
         for i, store_name in enumerate(store_names):
             try:
-                srow = df[df["小売店名称"] == store_name].iloc[0]
+                srow = df[df["店舗名称"] == store_name].iloc[0]
                 fac = filter_facilities(df, store_name, radius_km)
                 png = build_png(srow, fac, radius_km)
                 zf.writestr(f"{store_name}.png", png)
