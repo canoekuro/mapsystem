@@ -6,6 +6,11 @@ All notable changes to this project are documented in this file.
 
 ### 2026-06-26
 
+- feat: データ取得時に取得件数サマリを表示。取得後は常時、取得した行数と選択肢になる
+  店舗数を表示し（非0件は `st.success`、0件は「取得処理は成功しています」と明示した
+  `st.warning`）、0件のときに取得失敗と区別できない問題を解消した。
+  [詳細](docs/history/20260626-1200-fetch-count-display-plan.md) /
+  [結果](docs/history/20260626-1200-fetch-count-display-result.md)
 - feat: データ取得をオンデマンド方式へ変更。起動時は企業名称の DISTINCT のみを取得し、
   企業名称＋取得半径を指定して「データ取得」を押下したときに `企業名称 == 指定企業 AND
   距離km <= 取得半径` を Spark 側で適用して取得する（`load_master()` の全件ロードを廃止）。

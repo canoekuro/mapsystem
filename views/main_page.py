@@ -158,6 +158,19 @@ def render(companies: list[str]) -> None:
     loaded_company = st.session_state["loaded_company"]
     loaded_fetch_radius = st.session_state["loaded_fetch_radius"]
 
+    # --- 取得件数サマリ（取得後は常時表示）---
+    # 0件のとき選択肢が空になるだけで取得失敗と区別できない問題を避けるため、
+    # 取得した行数と選択肢になる店舗数を明示する（取得済みDFから都度算出）。
+    n_rows = len(df)
+    n_stores = df["店舗名称"].nunique() if n_rows else 0
+    if n_rows == 0:
+        st.warning(
+            f"取得結果: 0件 — {loaded_company} / 半径{loaded_fetch_radius}km に"
+            "該当するデータがありませんでした（取得処理は成功しています）"
+        )
+    else:
+        st.success(f"取得結果: {n_rows:,}件（店舗数: {n_stores:,}）")
+
     # 現在の入力が取得済み条件と異なる場合は案内（旧データは表示し続ける）。
     changed = (company is not None and company != loaded_company) or (
         fetch_radius is not None and fetch_radius != loaded_fetch_radius
