@@ -3,7 +3,8 @@ Data access helpers — reads master data from Databricks Unity Catalog.
 
 Functions
 ---------
-load_master()                          -- cached table loader (applies column mapping)
+load_company_names()                   -- cached lightweight distinct 企業名称 loader
+load_filtered()                        -- fetch one company within fetch radius (Spark-side filter)
 store_names(df)                        -- unique store names (sorted)
 company_names(df)                      -- unique company names (sorted)
 filter_facilities()                    -- filter by store + radius, add 連番
@@ -42,24 +43,63 @@ def _load_databricks_config() -> dict:
         return {}
 
 
-@st.cache_data
-def load_master() -> pd.DataFrame:
-    """Load master table from Databricks Unity Catalog and apply column name mapping."""
+def _table_and_spark():
+    """Return (table_name, spark_session) for Databricks queries."""
     from databricks.connect import DatabricksSession  # noqa: PLC0415
 
     config = _load_databricks_config()
     # TODO: config/databricks_config.toml の table キーに実際のテーブル名を設定してください
     table_name = config.get("table", "catalog.schema.table_name")
-
     spark = DatabricksSession.builder.serverless(True).getOrCreate()
-    df = spark.table(table_name).toPandas()
+    return table_name, spark
 
+
+def _rename_to_app_columns(df: pd.DataFrame) -> pd.DataFrame:
+    """Rename table columns to app column names using column_mapping.toml."""
     mapping = _load_column_mapping()
     # mapping: {app_name: col_name} -> rename col_name to app_name
     rename = {col_name: app_name for app_name, col_name in mapping.items() if col_name in df.columns}
-    if rename:
-        df = df.rename(columns=rename)
-    return df
+    return df.rename(columns=rename) if rename else df
+
+
+@st.cache_data(show_spinner="企業名称を取得中...")
+def load_company_names() -> list[str]:
+    """
+    Lightweight startup query: distinct 企業名称 only.
+
+    Avoids loading the full table — only the (few hundred) distinct company
+    names are pulled, so the app starts fast and queries on demand.
+    """
+    mapping = _load_column_mapping()
+    company_col = mapping.get("企業名称", "企業名称")
+
+    table_name, spark = _table_and_spark()
+    rows = spark.table(table_name).select(company_col).distinct().toPandas()
+    return sorted(rows[company_col].dropna().astype(str).tolist())
+
+
+@st.cache_data(show_spinner="データを取得中...")
+def load_filtered(company: str, fetch_radius_km: float) -> pd.DataFrame:
+    """
+    Fetch rows for one *company* within *fetch_radius_km* from Databricks.
+
+    Spark-side filter: 企業名称 == company AND 距離km <= fetch_radius_km.
+    Cached by (company, fetch_radius_km) so repeating the same request hits
+    the cache and changing either argument triggers a fresh query.
+    """
+    from pyspark.sql import functions as F  # noqa: PLC0415
+
+    mapping = _load_column_mapping()
+    company_col = mapping.get("企業名称", "企業名称")
+    distance_col = mapping.get("距離km", "距離km")
+
+    table_name, spark = _table_and_spark()
+    sdf = (
+        spark.table(table_name)
+        .where(F.col(company_col) == company)
+        .where(F.col(distance_col) <= float(fetch_radius_km))
+    )
+    return _rename_to_app_columns(sdf.toPandas())
 
 
 def store_names(df: pd.DataFrame) -> list[str]:
