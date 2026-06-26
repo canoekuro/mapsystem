@@ -8,12 +8,12 @@ render(df) -- render the whole single-page app.
 
 import logging
 
+import pandas as pd
 import streamlit as st
 from streamlit_folium import st_folium
 
 from lib.data import (
-    load_master,
-    company_names,
+    load_filtered,
     stores_for_company,
     filter_facilities,
     filter_company,
@@ -27,9 +27,10 @@ from lib.zip_builder import build_png_zip
 logger = logging.getLogger(__name__)
 
 
-@st.cache_data(show_spinner="画像を生成中...")
-def _company_image_zip(company: str, prefectures: tuple, radius: float) -> bytes:
-    df = load_master()
+# df is excluded from the cache key (hash_funcs returns None): it is uniquely
+# determined by the already-fetched (company, radius), which are part of the key.
+@st.cache_data(show_spinner="画像を生成中...", hash_funcs={pd.DataFrame: lambda _df: None})
+def _company_image_zip(df: pd.DataFrame, company: str, prefectures: tuple, radius: float) -> bytes:
     names = stores_for_company_prefectures(df, company, list(prefectures))
     return build_png_zip(df, names, radius)
 
@@ -114,104 +115,150 @@ def _data_source_caption() -> None:
     )
 
 
-def render(df) -> None:
-    """Render the single-page app."""
-    # --- 上部コントロール ---
-    c1, c2, c3 = st.columns(3)
-    with c1:
+def render(companies: list[str]) -> None:
+    """Render the single-page app.
+
+    *companies* is the list of distinct company names (loaded at startup).
+    The filtered DataFrame is fetched on demand when データ取得 is pressed and
+    kept in st.session_state.
+    """
+    # --- 取得行（常時表示）: 企業 + 取得半径 + データ取得ボタン ---
+    g1, g2, g3 = st.columns([2, 1, 1])
+    with g1:
         company = st.selectbox(
-            "企業名称", company_names(df), index=None, placeholder="企業を選択してください"
+            "企業名称", companies, index=None, placeholder="企業を選択してください"
         )
-    with c2:
-        store_opts = stores_for_company(df, company) if company else []
+    with g2:
+        fetch_radius = st.number_input(
+            "取得半径(km)", min_value=0.1, max_value=50.0,
+            value=None, step=0.1, placeholder="半径を入力",
+        )
+    with g3:
+        # ラベル高さ分のスペーサで selectbox/number_input と縦位置を揃える。
+        st.write("")
+        st.write("")
+        fetch_disabled = company is None or fetch_radius is None
+        fetch_clicked = st.button(
+            "データ取得", disabled=fetch_disabled, use_container_width=True, type="primary"
+        )
+
+    # データ取得: 企業 + 取得半径で Databricks 側を絞り込んで取得し、session_state に保存。
+    if fetch_clicked:
+        st.session_state["loaded_df"] = load_filtered(company, fetch_radius)
+        st.session_state["loaded_company"] = company
+        st.session_state["loaded_fetch_radius"] = fetch_radius
+
+    # 未取得なら案内のみ表示して終了。
+    if "loaded_df" not in st.session_state:
+        st.info("企業名称と取得半径を入力して「データ取得」を押してください")
+        _data_source_caption()
+        return
+
+    df = st.session_state["loaded_df"]
+    loaded_company = st.session_state["loaded_company"]
+    loaded_fetch_radius = st.session_state["loaded_fetch_radius"]
+
+    # 現在の入力が取得済み条件と異なる場合は案内（旧データは表示し続ける）。
+    changed = (company is not None and company != loaded_company) or (
+        fetch_radius is not None and fetch_radius != loaded_fetch_radius
+    )
+    if changed:
+        st.info(
+            f"現在の入力（{company} / {fetch_radius}km）は取得済みデータ"
+            f"（{loaded_company} / {loaded_fetch_radius}km）と異なります。"
+            "「データ取得」を押すと再取得します。"
+        )
+
+    # --- 表示行（取得後のみ）: 小売店 + 表示半径 ---
+    d1, d2 = st.columns([2, 1])
+    with d1:
         store = st.selectbox(
-            "小売店名称", store_opts, index=None, placeholder="店舗を選択してください"
+            "小売店名称", stores_for_company(df, loaded_company),
+            index=None, placeholder="店舗を選択してください",
         )
-    with c3:
-        radius = st.number_input(
-            "半径(km)", min_value=0.1, max_value=50.0, value=2.0, step=0.1
+    with d2:
+        # 表示半径は取得半径以下に制限（取得範囲外を表示しようとする事故を防ぐ）。
+        display_radius = st.number_input(
+            "表示半径(km)", min_value=0.1, max_value=loaded_fetch_radius,
+            value=loaded_fetch_radius, step=0.1,
         )
 
     # --- 企業一括ダウンロード（expander） ---
-    with c1:
-        with st.expander("企業一括ダウンロード", expanded=False):
-            # 表示順: データダウンロード → 都道府県で絞り込み → 画像をダウンロード。
-            # データ/画像は都道府県の選択値を使うため、コンテナで表示位置を固定しつつ
-            # 先に都道府県を読み取る。
-            data_box = st.container()
-            pref_box = st.container()
-            image_box = st.container()
+    # 取得済みDF全体（= 取得半径以内）を対象に、取得半径で出力する。
+    company = loaded_company
+    radius = loaded_fetch_radius
+    with st.expander("企業一括ダウンロード", expanded=False):
+        # 表示順: データダウンロード → 都道府県で絞り込み → 画像をダウンロード。
+        # データ/画像は都道府県の選択値を使うため、コンテナで表示位置を固定しつつ
+        # 先に都道府県を読み取る。
+        data_box = st.container()
+        pref_box = st.container()
+        image_box = st.container()
 
-            with pref_box:
-                pref_opts = prefectures_for_company(df, company) if company else []
-                prefs = st.multiselect(
-                    "都道府県で絞り込み", pref_opts, default=[],
-                    placeholder="都道府県を選択",
-                    disabled=company is None,
-                )
-                if prefs:
-                    count = store_count_for_company_prefectures(df, company, prefs)
-                    st.caption(f"選択中の都道府県: {count}件の店舗")
-
-            # ファイル名に都道府県を付加
-            pref_label = "_".join(sorted(prefs)) if prefs else ""
-            csv_filename = (
-                f"{company}_{pref_label}_{radius}km.csv"
-                if company and pref_label
-                else f"{company}_{radius}km.csv" if company
-                else "data.csv"
+        with pref_box:
+            pref_opts = prefectures_for_company(df, company)
+            prefs = st.multiselect(
+                "都道府県で絞り込み", pref_opts, default=[],
+                placeholder="都道府県を選択",
             )
-            zip_filename = (
-                f"{company}_{pref_label}_{radius}km.zip"
-                if company and pref_label
-                else f"{company}_{radius}km.zip" if company
-                else "images.zip"
+            if prefs:
+                count = store_count_for_company_prefectures(df, company, prefs)
+                st.caption(f"選択中の都道府県: {count}件の店舗")
+
+        # ファイル名に都道府県を付加
+        pref_label = "_".join(sorted(prefs)) if prefs else ""
+        csv_filename = (
+            f"{company}_{pref_label}_{radius}km.csv"
+            if pref_label
+            else f"{company}_{radius}km.csv"
+        )
+        zip_filename = (
+            f"{company}_{pref_label}_{radius}km.zip"
+            if pref_label
+            else f"{company}_{radius}km.zip"
+        )
+
+        # データダウンロード（単一CSV cp932・直接生成、都道府県選択時は絞込）
+        with data_box:
+            _csv = (
+                filter_company(df, company, radius, prefectures=prefs if prefs else None)
+                .to_csv(index=False)
+                .encode("cp932", errors="replace")
+            )
+            st.download_button(
+                "データダウンロード",
+                data=_csv,
+                file_name=csv_filename,
+                mime="text/csv",
+                use_container_width=True,
             )
 
-            # データダウンロード（単一CSV cp932・直接生成、都道府県選択時は絞込）
-            with data_box:
-                if company is not None:
-                    _csv = (
-                        filter_company(df, company, radius, prefectures=prefs if prefs else None)
-                        .to_csv(index=False)
-                        .encode("cp932", errors="replace")
-                    )
-                else:
-                    _csv = b""
-                st.download_button(
-                    "データダウンロード",
-                    data=_csv,
-                    file_name=csv_filename,
-                    mime="text/csv",
-                    disabled=company is None,
-                    use_container_width=True,
-                )
-
-            # 画像をダウンロード（都道府県で絞込 → 1ボタンDL）
-            with image_box:
-                img_disabled = company is None or not prefs
-                img_data = (
-                    _company_image_zip(company, tuple(sorted(prefs)), radius)
-                    if not img_disabled
-                    else b""
-                )
-                st.download_button(
-                    "画像をダウンロード",
-                    data=img_data,
-                    file_name=zip_filename,
-                    mime="application/zip",
-                    disabled=img_disabled,
-                    use_container_width=True,
-                )
+        # 画像をダウンロード（都道府県で絞込 → 1ボタンDL）
+        with image_box:
+            img_disabled = not prefs
+            img_data = (
+                _company_image_zip(df, company, tuple(sorted(prefs)), radius)
+                if not img_disabled
+                else b""
+            )
+            st.download_button(
+                "画像をダウンロード",
+                data=img_data,
+                file_name=zip_filename,
+                mime="application/zip",
+                disabled=img_disabled,
+                use_container_width=True,
+            )
 
     st.divider()
 
     # --- 地図＋施設リスト ---
+    # 表示は display_radius（取得済みデータをさらに絞り込む）で行う。
     if store is None:
-        st.info("企業名称と小売店名称を選択してください")
+        st.info("小売店名称を選択してください")
     else:
         srow = df[df["店舗名称"] == store].iloc[0]
-        fac = filter_facilities(df, store, radius)
+        fac = filter_facilities(df, store, display_radius)
 
         # マップを誤って操作した場合に初期表示へ戻すリセット（紫帯の上に配置）。
         # st_folium の key を変えると再マウントされ、build_map の初期位置/ズームに戻る。
@@ -219,7 +266,7 @@ def render(df) -> None:
             st.session_state["map_nonce"] = st.session_state.get("map_nonce", 0) + 1
         nonce = st.session_state.get("map_nonce", 0)
 
-        st.markdown(_header_html(store, radius), unsafe_allow_html=True)
+        st.markdown(_header_html(store, display_radius), unsafe_allow_html=True)
         n = len(fac)
         if n == 0:
             st.warning("該当する推進園がありません")
@@ -227,10 +274,10 @@ def render(df) -> None:
         col_map, col_list = st.columns([2, 1])
         with col_map:
             st_folium(
-                build_map(srow, fac, radius),
+                build_map(srow, fac, display_radius),
                 width=700,
                 height=560,
-                key=f"map_{store}_{radius}_{nonce}",
+                key=f"map_{store}_{display_radius}_{nonce}",
             )
         with col_list:
             st.markdown(_facility_list_html(fac), unsafe_allow_html=True)
