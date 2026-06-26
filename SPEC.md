@@ -32,12 +32,14 @@
 
 ## 4. 入力データ仕様
 
-### 4.1 ファイル
+### 4.1 データソース
 
-- パス: `data/master.csv`
-- 文字コード: UTF-8 (BOM無)
-- 区切り: カンマ
-- 想定件数: 約 5万行（店舗 × 推進園 の組合せ）
+- **種別:** Databricks Unity Catalog テーブル（Delta Table）
+- **テーブル名:** `config/databricks_config.toml` の `[databricks] table` で指定（3 パート名 `catalog.schema.table`）
+- **接続:** `DatabricksSession.builder.getOrCreate()`（Databricks Apps 内では自動クレデンシャル取得）
+- **想定件数:** 約 5万行以上（店舗 × 推進園 の組合せ）
+
+> **ローカル開発時:** `~/.databrickscfg` または環境変数 `DATABRICKS_HOST` / `DATABRICKS_TOKEN` を設定すること。
 
 ### 4.2 カラム定義
 
@@ -223,8 +225,18 @@ jageocoder 用住所データベース（住居表示レベル）を利用
 ```python
 @st.cache_data
 def load_master() -> pd.DataFrame:
-    return pd.read_csv("data/master.csv")
+    """Load master table from Databricks Unity Catalog."""
+    from databricks.connect import DatabricksSession
+    config = _load_databricks_config()  # config/databricks_config.toml から取得
+    table_name = config.get("table", "catalog.schema.table_name")
+    spark = DatabricksSession.builder.getOrCreate()
+    df = spark.table(table_name).toPandas()
+    # 列名マッピングを適用（config/column_mapping.toml）
+    ...
+    return df
 ```
+
+テーブル名は `config/databricks_config.toml` で管理する（`[databricks] table = "catalog.schema.table_name"`）。
 
 ### 8.2 絞込ロジック
 
@@ -307,13 +319,14 @@ buf.seek(0)
 ├ views/                  # 画面（pages/ は使わない＝自動マルチページ回避）
 │  └ main_page.py         # 単一ページ（コントロール＋一括DL＋地図＋施設リスト＋出典）
 ├ lib/
-│  ├ data.py              # マスタロード、絞込、ズーム算出
+│  ├ data.py              # マスタロード（Databricks テーブル）、絞込、ズーム算出
 │  ├ map_builder.py       # folium.Map 生成（画面内の対話地図）
 │  ├ static_map.py        # ブラウザレス静的地図生成（PNG用、OSMタイル+Pillow）
 │  ├ png_builder.py       # PNG 合成（Pillow）
 │  └ zip_builder.py       # 画像ZIP 生成
-├ data/
-│  └ master.csv
+├ config/
+│  ├ column_mapping.toml  # アプリ列名 ↔ テーブル列名マッピング
+│  └ databricks_config.toml  # Databricks テーブル名設定
 ├ fonts/
 │  └ ipaexg.ttf
 ├ requirements.txt
