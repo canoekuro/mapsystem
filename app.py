@@ -15,10 +15,21 @@ import logging
 
 import streamlit as st
 
-from lib.data import load_company_names
+from lib.data import load_company_names, load_table_last_updated
 from views import main_page, upload_page
 
 logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+
+def _render_last_updated() -> None:
+    """Show the table's last data-update datetime (common to all pages)."""
+    try:
+        ts = load_table_last_updated()
+    except Exception as e:  # noqa: BLE001
+        logger.warning("テーブル更新日時の取得に失敗: %s", e)
+        ts = None
+    st.caption(f"データ最終更新: {ts}（JST）" if ts else "データ最終更新: 取得できませんでした")
 
 
 def _map_page() -> None:
@@ -36,6 +47,7 @@ def _upload_page() -> None:
 
 def main() -> None:
     st.set_page_config(page_title="店舗周辺マップ", layout="wide")
+    _render_last_updated()  # 共通: 両ページの上部に表示
     nav = st.navigation(
         [
             st.Page(_map_page, title="マップ", default=True),

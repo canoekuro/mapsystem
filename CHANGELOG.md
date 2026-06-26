@@ -6,6 +6,11 @@ All notable changes to this project are documented in this file.
 
 ### 2026-06-26
 
+- feat: テーブルの最終更新日時（最後のデータ更新）を全ページ上部に表示。`DESCRIBE HISTORY` から
+  WRITE/MERGE/UPDATE/DELETE 等のデータ更新操作のみを抽出して最新タイムスタンプを JST 表示し
+  （OPTIMIZE/VACUUM 等の保守操作は除外）、アップロード後のジョブ反映の目安にできるようにした。
+  [詳細](docs/history/20260626-1500-table-last-updated-plan.md) /
+  [結果](docs/history/20260626-1500-table-last-updated-result.md)
 - feat: データ更新（アップロード）機能を追加。`st.navigation` でマルチページ化し、別ページで
   推進園・店舗の Excel をアップロードして「更新」押下時に Unity Catalog Volume へ格納する。
   各ファイルは固定名（`nursery.xlsx` / `store.xlsx`）に変換され、格納先フォルダ内の既存ファイルを
