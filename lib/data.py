@@ -51,7 +51,7 @@ def load_master() -> pd.DataFrame:
     # TODO: config/databricks_config.toml の table キーに実際のテーブル名を設定してください
     table_name = config.get("table", "catalog.schema.table_name")
 
-    spark = DatabricksSession.builder.getOrCreate()
+    spark = DatabricksSession.builder.serverless(True).getOrCreate()
     df = spark.table(table_name).toPandas()
 
     mapping = _load_column_mapping()
