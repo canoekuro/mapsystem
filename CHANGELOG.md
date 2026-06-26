@@ -6,6 +6,13 @@ All notable changes to this project are documented in this file.
 
 ### 2026-06-26
 
+- feat: データ更新（アップロード）機能を追加。`st.navigation` でマルチページ化し、別ページで
+  推進園・店舗の Excel をアップロードして「更新」押下時に Unity Catalog Volume へ格納する。
+  各ファイルは固定名（`nursery.xlsx` / `store.xlsx`）に変換され、格納先フォルダ内の既存ファイルを
+  置き換える。片方のみのアップロードにも対応（その側のフォルダのみ更新）。テーブル更新は
+  Databricks ジョブ側の責務とする。
+  [詳細](docs/history/20260626-1400-data-upload-plan.md) /
+  [結果](docs/history/20260626-1400-data-upload-result.md)
 - feat: データ取得時に取得件数サマリを表示。取得後は常時、取得した行数と選択肢になる
   店舗数を表示し（非0件は `st.success`、0件は「取得処理は成功しています」と明示した
   `st.warning`）、0件のときに取得失敗と区別できない問題を解消した。
