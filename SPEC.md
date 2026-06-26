@@ -36,8 +36,11 @@
 
 - **種別:** Databricks Unity Catalog テーブル（Delta Table）
 - **テーブル名:** `config/databricks_config.toml` の `[databricks] table` で指定（3 パート名 `catalog.schema.table`）
-- **接続:** `DatabricksSession.builder.getOrCreate()`（Databricks Apps 内では自動クレデンシャル取得）
+- **接続:** `DatabricksSession.builder.serverless(True).getOrCreate()`（Databricks Apps 内では自動クレデンシャル取得）
 - **想定件数:** 約 5万行以上（店舗 × 推進園 の組合せ）
+- **取得方式:** オンデマンド取得。起動時は全件をロードせず、企業名称の DISTINCT のみを軽量クエリで取得する。
+  ユーザーが企業名称と取得半径を指定して「データ取得」を押下したとき、`企業名称 == 指定企業 AND 距離km <= 取得半径`
+  を Spark 側で適用してから `toPandas()` で取得する（大量データの転送を回避）。
 
 > **ローカル開発時:** `~/.databrickscfg` または環境変数 `DATABRICKS_HOST` / `DATABRICKS_TOKEN` を設定すること。
 
@@ -221,31 +224,51 @@ jageocoder 用住所データベース（住居表示レベル）を利用
 
 ## 8. データ処理仕様
 
-### 8.1 マスタロード
+### 8.1 データ取得（オンデマンド）
+
+起動時に全件をロードせず、必要なデータだけを都度取得する。
 
 ```python
-@st.cache_data
-def load_master() -> pd.DataFrame:
-    """Load master table from Databricks Unity Catalog."""
-    from databricks.connect import DatabricksSession
-    config = _load_databricks_config()  # config/databricks_config.toml から取得
-    table_name = config.get("table", "catalog.schema.table_name")
-    spark = DatabricksSession.builder.getOrCreate()
-    df = spark.table(table_name).toPandas()
+@st.cache_data(show_spinner="企業名称を取得中...")
+def load_company_names() -> list[str]:
+    """起動時の軽量クエリ: 企業名称の DISTINCT のみ。"""
+    spark = DatabricksSession.builder.serverless(True).getOrCreate()
+    rows = spark.table(table_name).select(company_col).distinct().toPandas()
+    return sorted(rows[company_col].dropna().astype(str).tolist())
+
+
+@st.cache_data(show_spinner="データを取得中...")
+def load_filtered(company: str, fetch_radius_km: float) -> pd.DataFrame:
+    """企業 + 取得半径で Spark 側を絞り込んで取得する。"""
+    from pyspark.sql import functions as F
+    spark = DatabricksSession.builder.serverless(True).getOrCreate()
+    sdf = (
+        spark.table(table_name)
+        .where(F.col(company_col) == company)
+        .where(F.col(distance_col) <= float(fetch_radius_km))
+    )
+    df = sdf.toPandas()
     # 列名マッピングを適用（config/column_mapping.toml）
     ...
     return df
 ```
 
-テーブル名は `config/databricks_config.toml` で管理する（`[databricks] table = "catalog.schema.table_name"`）。
+- テーブル名は `config/databricks_config.toml` で管理する（`[databricks] table = "catalog.schema.table_name"`）。
+- `load_filtered` は `@st.cache_data` により `(company, fetch_radius_km)` でキャッシュされる。
+  同一条件の再押下はキャッシュヒット、条件変更時は新規クエリとなる。
+- 取得結果は `st.session_state["loaded_df"]` に保持し、以降の絞込・地図表示はこの部分集合に対して
+  インメモリで行う。
 
 ### 8.2 絞込ロジック
 
+取得済み DF（取得半径以内）に対し、**表示半径**でさらにインメモリ絞込を行う
+（表示半径 ≤ 取得半径。例: 5km で取得して 2km で表示）。
+
 ```python
 filtered = df[
-    (df["小売店名称"] == store_name) &
-    (df["距離"] <= radius_km)
-].sort_values("距離").reset_index(drop=True)
+    (df["店舗名称"] == store_name) &
+    (df["距離km"] <= display_radius_km)
+].sort_values("距離km").reset_index(drop=True)
 filtered["連番"] = filtered.index + 1
 ```
 

@@ -4,6 +4,16 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+### 2026-06-26
+
+- feat: データ取得をオンデマンド方式へ変更。起動時は企業名称の DISTINCT のみを取得し、
+  企業名称＋取得半径を指定して「データ取得」を押下したときに `企業名称 == 指定企業 AND
+  距離km <= 取得半径` を Spark 側で適用して取得する（`load_master()` の全件ロードを廃止）。
+  取得用半径と表示用半径を分離し、取得済みデータを表示半径（取得半径以下）でインメモリ絞込
+  できるようにした（例: 5km で取得して 2km で表示）。
+  [詳細](docs/history/20260626-0500-on-demand-fetch-plan.md) /
+  [結果](docs/history/20260626-0500-on-demand-fetch-result.md)
+
 ### 2026-06-25
 
 - feat: データソースをローカル `data/master.csv` から Databricks Unity Catalog テーブルへ移行。
