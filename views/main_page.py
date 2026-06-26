@@ -69,10 +69,10 @@ def _facility_list_html(fac) -> str:
         "</div>"
     )
     for _, row in fac.iterrows():
-        color = _facility_color(row["施設区分"])
+        color = _facility_color(row["推進園区分"])
         number = int(row["連番"])
-        name = row["施設名称"]
-        distance = row["距離"]
+        name = row["推進園名称"]
+        distance = row["距離km"]
         badge = (
             '<div style="'
             f"background-color:{color};"
@@ -210,7 +210,7 @@ def render(df) -> None:
     if store is None:
         st.info("企業名称と小売店名称を選択してください")
     else:
-        srow = df[df["小売店名称"] == store].iloc[0]
+        srow = df[df["店舗名称"] == store].iloc[0]
         fac = filter_facilities(df, store, radius)
 
         # マップを誤って操作した場合に初期表示へ戻すリセット（紫帯の上に配置）。

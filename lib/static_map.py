@@ -105,11 +105,11 @@ def render_static_map(store_row, facilities_df, radius_km: float, size: int = 65
     Render a size x size PNG centered on the store (SPEC §6.1.2 map area).
 
     Draws OSM base tiles, the radius circle, the store marker, numbered
-    facility markers (colored by 施設区分), and a legend.  Tile-fetch failures
+    facility markers (colored by 推進園区分), and a legend.  Tile-fetch failures
     propagate so callers can skip the store (SPEC §11).
     """
-    clat = float(store_row["店舗緯度"])
-    clon = float(store_row["店舗経度"])
+    clat = float(store_row["店舗lat"])
+    clon = float(store_row["店舗lon"])
     zoom = zoom_for_radius(radius_km, clat, viewport_px=size)
     n_tiles = 2 ** zoom
 
@@ -163,8 +163,8 @@ def render_static_map(store_row, facilities_df, radius_km: float, size: int = 65
     # --- Facility markers (colored circle + white number) ---
     badge_font = _font(12)
     for _, row in facilities_df.iterrows():
-        px, py = to_px(float(row["施設緯度"]), float(row["施設経度"]))
-        color = _FACILITY_COLORS.get(row["施設区分"], _FALLBACK_COLOR)
+        px, py = to_px(float(row["推進園lat"]), float(row["推進園lon"]))
+        color = _FACILITY_COLORS.get(row["推進園区分"], _FALLBACK_COLOR)
         r = 11
         draw.ellipse(
             [px - r, py - r, px + r, py + r],
