@@ -12,6 +12,13 @@
 # Databricks はコマンドをシェルで実行しないため ${VAR} 展開は不可。ポートはランタイムが
 # Streamlit 向けに自動注入する（STREAMLIT_SERVER_PORT=DATABRICKS_APP_PORT）。よって
 # --server.port は指定せず、その他の設定は env（リテラル値）で行う。
+resources:
+  - name: "main-warehouse"
+    description: "データ読み込み用 SQL Warehouse"
+    sql_warehouse:
+      id: "your_warehouse_id_here"
+      permission: "CAN_USE"
+
 command:
   - streamlit
   - run
