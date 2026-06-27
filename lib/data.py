@@ -78,6 +78,40 @@ def load_company_names() -> list[str]:
     return sorted(rows[company_col].dropna().astype(str).tolist())
 
 
+@st.cache_data(ttl=300, show_spinner=False)
+def load_table_last_updated() -> str | None:
+    """
+    Return the JST datetime string of the table's latest data update, or None.
+
+    Reads DESCRIBE HISTORY and keeps only data-modifying operations
+    (WRITE/MERGE/UPDATE/DELETE/...), so maintenance operations such as
+    OPTIMIZE/VACUUM do not count as "data updates".  Cached with a short TTL so
+    the display refreshes after a Databricks job updates the table.
+    """
+    from pyspark.sql import functions as F  # noqa: PLC0415
+
+    data_ops = [
+        "WRITE", "MERGE", "UPDATE", "DELETE", "TRUNCATE", "COPY INTO",
+        "STREAMING UPDATE", "CREATE TABLE AS SELECT",
+        "REPLACE TABLE AS SELECT", "CREATE OR REPLACE TABLE AS SELECT",
+    ]
+
+    table_name, spark = _table_and_spark()
+    pdf = (
+        spark.sql(f"DESCRIBE HISTORY {table_name}")
+        .where(F.col("operation").isin(data_ops))
+        .agg(F.max("timestamp").alias("ts"))
+        .toPandas()
+    )
+    if pdf.empty or pd.isna(pdf["ts"].iloc[0]):
+        return None
+
+    ts = pd.Timestamp(pdf["ts"].iloc[0])
+    if ts.tzinfo is None:  # serverless セッションは UTC 想定
+        ts = ts.tz_localize("UTC")
+    return ts.tz_convert("Asia/Tokyo").strftime("%Y-%m-%d %H:%M")
+
+
 @st.cache_data(show_spinner="データを取得中...")
 def load_filtered(company: str, fetch_radius_km: float) -> pd.DataFrame:
     """

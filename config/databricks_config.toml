@@ -9,3 +9,13 @@
 [databricks]
 # TODO: 実際のテーブル名に変更してください
 table = "catalog.schema.table_name"
+
+# データ更新（アップロード）機能の格納先 Volume フォルダ。
+# アップロードされた Excel は固定名で各フォルダへ格納される
+# （推進園 -> nursery.xlsx, 店舗 -> store.xlsx）。テーブル更新は Databricks ジョブ側で行う。
+[volume]
+# TODO: 実際の Volume パスに変更してください
+# 推進園データ（nursery.xlsx）の格納先フォルダ
+nursery_dir = "/Volumes/catalog/schema/volume_name/nursery"
+# 店舗データ（store.xlsx）の格納先フォルダ
+store_dir = "/Volumes/catalog/schema/volume_name/store"

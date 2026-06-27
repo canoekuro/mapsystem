@@ -5,3 +5,4 @@ streamlit-folium>=0.20
 Pillow>=10,<11
 requests>=2,<3
 databricks-connect>=14.0
+databricks-sdk>=0.20
