@@ -4,6 +4,15 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+### 2026-06-29
+
+- fix: 地図の凡例（保育園 / 幼稚園 / こども園）を画面の地図とダウンロードPNGの両方から削除。
+  実データに推進園区分の実フラグが無く全マーカーがフォールバック色になるため、凡例が
+  意味をなしていなかった。色分けロジック自体は残置。あわせて施設リスト・マーカー tooltip・
+  PNG の距離表示をフル精度から小数第2位（`約0.30km`）へ丸めるよう変更し、SPEC を実態へ整合。
+  [詳細](docs/history/20260629-1519-issue-202606291519-plan.md) /
+  [結果](docs/history/20260629-1519-issue-202606291519-result.md)
+
 ### 2026-06-26
 
 - feat: テーブルの最終更新日時（最後のデータ更新）を全ページ上部に表示。`DESCRIBE HISTORY` から

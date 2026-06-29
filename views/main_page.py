@@ -87,7 +87,7 @@ def _facility_list_html(fac) -> str:
         info = (
             '<div style="margin-left:8px;">'
             f'<div style="font-size:14px;font-weight:bold;color:#111827;">{name}</div>'
-            f'<div style="font-size:12px;color:#6B7280;">約{distance}km</div>'
+            f'<div style="font-size:12px;color:#6B7280;">約{distance:.2f}km</div>'
             "</div>"
         )
         parts.append(
