@@ -19,30 +19,11 @@ _FACILITY_COLORS: dict[str, str] = {
 }
 _FALLBACK_COLOR = "#6B7280"
 
-_LEGEND_HTML = """
-<div style="
-    position: fixed;
-    bottom: 30px;
-    right: 10px;
-    z-index: 1000;
-    background-color: #FFFFFF;
-    border-radius: 6px;
-    padding: 8px 12px;
-    font-size: 12px;
-    line-height: 1.8;
-    box-shadow: 0 1px 4px rgba(0,0,0,0.3);
-">
-    <span style="color:#22C55E; font-size:16px;">&#9679;</span> 保育園<br>
-    <span style="color:#EF4444; font-size:16px;">&#9679;</span> 幼稚園<br>
-    <span style="color:#F59E0B; font-size:16px;">&#9679;</span> こども園
-</div>
-"""
-
 
 def build_map(store_row, facilities_df, radius_km: float) -> folium.Map:
     """
     Build a folium.Map centred on *store_row* showing a radius circle,
-    the store marker, numbered facility markers, and a legend.
+    the store marker, and numbered facility markers.
 
     Parameters
     ----------
@@ -107,11 +88,8 @@ def build_map(store_row, facilities_df, radius_km: float) -> folium.Map:
         )
         folium.Marker(
             location=[row["推進園lat"], row["推進園lon"]],
-            tooltip=f"{number}. {facility_name}（{distance}km）",
+            tooltip=f"{number}. {facility_name}（{distance:.2f}km）",
             icon=icon,
         ).add_to(m)
-
-    # --- 5. Legend (SPEC §6.1.2) ---
-    m.get_root().html.add_child(folium.Element(_LEGEND_HTML))
 
     return m
