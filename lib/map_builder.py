@@ -9,15 +9,29 @@ build_map(store_row, facilities_df, radius_km) -- build a folium.Map for a store
 import folium
 from folium.plugins import BeautifyIcon
 
+from lib.colors import FACILITY_COLORS, facility_color
 from lib.data import zoom_for_radius
 
-# Color mapping by 推進園区分 (SPEC §6.1.2)
-_FACILITY_COLORS: dict[str, str] = {
-    "保育園": "#22C55E",
-    "幼稚園": "#EF4444",
-    "こども園": "#F59E0B",
-}
-_FALLBACK_COLOR = "#6B7280"
+
+def _legend_html() -> str:
+    """推進園区分の凡例（地図左下に重ねる HTML 断片）。"""
+    rows = "".join(
+        '<div style="display:flex;align-items:center;margin:2px 0;">'
+        f'<span style="width:12px;height:12px;border-radius:50%;'
+        f'background:{color};display:inline-block;margin-right:6px;'
+        'flex-shrink:0;"></span>'
+        f'<span style="font-size:12px;color:#111827;">{category}</span>'
+        "</div>"
+        for category, color in FACILITY_COLORS.items()
+    )
+    return (
+        '<div style="position:absolute;bottom:16px;left:16px;z-index:9999;'
+        "background:rgba(255,255,255,0.92);padding:8px 10px;border-radius:6px;"
+        'box-shadow:0 1px 4px rgba(0,0,0,0.3);border:1px solid #E5E7EB;">'
+        '<div style="font-size:12px;font-weight:bold;color:#111827;'
+        'margin-bottom:4px;">推進園区分</div>'
+        f"{rows}</div>"
+    )
 
 
 def build_map(store_row, facilities_df, radius_km: float) -> folium.Map:
@@ -73,8 +87,7 @@ def build_map(store_row, facilities_df, radius_km: float) -> folium.Map:
 
     # --- 4. Facility markers (SPEC §6.1.2) ---
     for _, row in facilities_df.iterrows():
-        category = row["推進園区分"]
-        bg_color = _FACILITY_COLORS.get(category, _FALLBACK_COLOR)
+        bg_color = facility_color(row["推進園区分"])
         number = int(row["連番"])
         distance = row["距離km"]
         facility_name = row["推進園名称"]
@@ -91,5 +104,8 @@ def build_map(store_row, facilities_df, radius_km: float) -> folium.Map:
             tooltip=f"{number}. {facility_name}（{distance:.2f}km）",
             icon=icon,
         ).add_to(m)
+
+    # --- 5. Legend (推進園区分の色分け凡例, SPEC §6.1.2) ---
+    m.get_root().html.add_child(folium.Element(_legend_html()))
 
     return m

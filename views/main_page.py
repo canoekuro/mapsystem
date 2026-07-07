@@ -12,6 +12,7 @@ import pandas as pd
 import streamlit as st
 from streamlit_folium import st_folium
 
+from lib.colors import facility_color
 from lib.data import (
     load_filtered,
     stores_for_company,
@@ -35,13 +36,7 @@ def _company_image_zip(df: pd.DataFrame, company: str, prefectures: tuple, radiu
     return build_png_zip(df, names, radius)
 
 
-_FACILITY_COLORS = {"保育園": "#22C55E", "幼稚園": "#EF4444", "こども園": "#F59E0B"}
-_FALLBACK_COLOR = "#6B7280"
 _HEADER_COLOR = "#7C3AED"
-
-
-def _facility_color(category: str) -> str:
-    return _FACILITY_COLORS.get(category, _FALLBACK_COLOR)
 
 
 def _header_html(store: str, radius: float) -> str:
@@ -70,7 +65,7 @@ def _facility_list_html(fac) -> str:
         "</div>"
     )
     for _, row in fac.iterrows():
-        color = _facility_color(row["推進園区分"])
+        color = facility_color(row["推進園区分"])
         number = int(row["連番"])
         name = row["推進園名称"]
         distance = row["距離km"]

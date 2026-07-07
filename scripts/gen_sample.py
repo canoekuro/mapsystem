@@ -72,9 +72,17 @@ COMPANIES = [
     },
 ]
 
-FACILITY_TYPES = ["保育園", "幼稚園", "こども園"]
+# 推進園名称 の末尾に付く自然な語（表示名用）
+FACILITY_NAME_SUFFIXES = ["保育園", "幼稚園", "こども園"]
 
 FACILITY_TYPE_WEIGHTS = [0.45, 0.30, 0.25]
+
+# 表示名の末尾語 → 実データの 推進園区分（色分けキー）
+FACILITY_CATEGORY_BY_SUFFIX = {
+    "保育園": "認可保育所",
+    "幼稚園": "幼稚園",
+    "こども園": "認定こども園",
+}
 
 FACILITY_NAME_PREFIXES = [
     "さくら", "ひまわり", "たんぽぽ", "あおぞら", "にじ", "ほし", "つくし", "やまびこ",
@@ -160,8 +168,11 @@ for company_info in COMPANIES:
             fac_lat = round(store_lat + dlat, 6)
             fac_lon = round(store_lon + dlon, 6)
 
-            ftype = random.choices(FACILITY_TYPES, weights=FACILITY_TYPE_WEIGHTS, k=1)[0]
-            fac_name = random_facility_name(ftype, used_names)
+            suffix = random.choices(
+                FACILITY_NAME_SUFFIXES, weights=FACILITY_TYPE_WEIGHTS, k=1
+            )[0]
+            fac_name = random_facility_name(suffix, used_names)
+            category = FACILITY_CATEGORY_BY_SUFFIX[suffix]
             fac_address = generate_facility_address(fac_lat, fac_lon)
 
             dist_km = round(haversine(store_lat, store_lon, fac_lat, fac_lon), 1)
@@ -177,7 +188,7 @@ for company_info in COMPANIES:
                     "店舗lat": store_lat,
                     "店舗lon": store_lon,
                     "推進園名称": fac_name,
-                    "推進園区分": ftype,
+                    "推進園区分": category,
                     "推進園_都道府県": store_pref,
                     "推進園住所": fac_address,
                     "推進園lat": fac_lat,
