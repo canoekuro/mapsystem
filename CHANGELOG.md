@@ -6,6 +6,21 @@ All notable changes to this project are documented in this file.
 
 ### 2026-07-07
 
+- feat: 「テーマ設定」ページを追加し、配色を config から調整可能に。凡例（推進園区分）・
+  半径円（線色＋塗り透明度）・見出し帯／施設リストヘッダー・店舗マーカーの色を `st.color_picker`
+  で選び、`config/theme.toml` に保存すると地図とダウンロードPNGの双方へ反映される。配色は
+  `lib/colors.py` のテーマに一元化し、各描画のハードコード（`#7C3AED` ×4 等）を撤去。店舗マーカーは
+  任意の hex 色を指定できるよう `BeautifyIcon` 化。Databricks Apps は FS 揮発性のため保存の恒久化は
+  「設定TOMLをダウンロード」→リポジトリにコミットで行う（UI で誘導）。
+  [詳細](docs/history/20260707-1002-theme-config-page-plan.md) /
+  [結果](docs/history/20260707-1002-theme-config-page-result.md)
+- fix: 推進園区分の色分けを区別しやすい配色へ変更。認可保育所（緑）と認定こども園（黄）が
+  紛らわしいという実機フィードバックを受け、色覚多様性にも配慮した高コントラストな3色
+  （認可保育所=青 `#2A78D6` / 認定こども園=橙 `#EB6834` / 幼稚園=紫 `#4A3AA7`）へ更新。
+  紛らわしかった2区分は最も分離の大きい色対（青↔橙）へ割り当て。色定義は一元化済みのため
+  `lib/colors.py` の変更が全描画へ反映される。配色は validate_palette で検証（全チェック PASS）。
+  [詳細](docs/history/20260707-0936-color-contrast-improvement-plan.md) /
+  [結果](docs/history/20260707-0936-color-contrast-improvement-result.md)
 - feat: 推進園区分の色分け凡例（認可保育所 / 認定こども園 / 幼稚園）を地図左下に表示。
   インタラクティブ地図（folium）は HTML 凡例を重ね、ダウンロード/静的PNG は地図画像へ
   凡例を焼き込む。あわせて4箇所（`map_builder` / `png_builder` / `static_map` / `main_page`）に

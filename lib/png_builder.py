@@ -20,7 +20,7 @@ import os
 
 from PIL import Image, ImageDraw, ImageFont
 
-from lib.colors import facility_color
+from lib.colors import band_color, facility_color
 from lib.static_map import render_static_map
 
 logger = logging.getLogger(__name__)
@@ -42,7 +42,7 @@ LIST_TOP = MAP_TOP + LIST_HEADER_H  # 144
 CARD_H = 56                 # card height per facility
 
 # --- Colors ----------------------------------------------------------------
-PURPLE = "#7C3AED"
+# 見出し帯（ヘッダ帯・リスト帯）は lib.colors のテーマ（band_color）から取得する。
 WHITE = "#FFFFFF"
 NAME_COLOR = "#111827"
 DIST_COLOR = "#6B7280"
@@ -87,7 +87,8 @@ def compose_canvas(
     draw = ImageDraw.Draw(canvas)
 
     # --- Header band ---
-    draw.rectangle([0, 0, CANVAS_W, HEADER_H], fill=PURPLE)
+    band = band_color()
+    draw.rectangle([0, 0, CANVAS_W, HEADER_H], fill=band)
     header_text = f"{store_name} 周辺マップ概要 ｜ 半径{radius_km}km圏内"
     draw.text(
         (24, HEADER_H / 2),
@@ -126,7 +127,7 @@ def compose_canvas(
     canvas.paste(map_img, (0, MAP_TOP))
 
     # --- List header band ("施設リスト") ---
-    draw.rectangle([LIST_X, MAP_TOP, CANVAS_W, LIST_TOP], fill=PURPLE)
+    draw.rectangle([LIST_X, MAP_TOP, CANVAS_W, LIST_TOP], fill=band)
     draw.text(
         (LIST_X + LIST_W / 2, MAP_TOP + LIST_HEADER_H / 2),
         "施設リスト",

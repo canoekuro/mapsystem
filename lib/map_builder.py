@@ -9,7 +9,13 @@ build_map(store_row, facilities_df, radius_km) -- build a folium.Map for a store
 import folium
 from folium.plugins import BeautifyIcon
 
-from lib.colors import FACILITY_COLORS, facility_color
+from lib.colors import (
+    circle_color,
+    circle_fill_opacity,
+    facility_color,
+    facility_colors,
+    store_marker_color,
+)
 from lib.data import zoom_for_radius
 
 
@@ -22,7 +28,7 @@ def _legend_html() -> str:
         'flex-shrink:0;"></span>'
         f'<span style="font-size:12px;color:#111827;">{category}</span>'
         "</div>"
-        for category, color in FACILITY_COLORS.items()
+        for category, color in facility_colors().items()
     )
     return (
         '<div style="position:absolute;bottom:16px;left:16px;z-index:9999;'
@@ -66,22 +72,30 @@ def build_map(store_row, facilities_df, radius_km: float) -> folium.Map:
         height=560,
     )
 
-    # --- 2. Radius circle (SPEC §6.1.2) ---
+    # --- 2. Radius circle (SPEC §6.1.2, テーマ調整可) ---
+    circle_hex = circle_color()
     folium.Circle(
         location=[lat, lon],
         radius=radius_km * 1000,
-        color="#7C3AED",
+        color=circle_hex,
         weight=2,
         dash_array="8,8",
         fill=True,
-        fill_color="#7C3AED",
-        fill_opacity=0.08,
+        fill_color=circle_hex,
+        fill_opacity=circle_fill_opacity(),
     ).add_to(m)
 
-    # --- 3. Store marker (SPEC §6.1.2) ---
+    # --- 3. Store marker (SPEC §6.1.2, テーマ調整可) ---
+    # 任意の hex 色を指定できるよう folium.Icon（名前付き色のみ）ではなく BeautifyIcon を使う。
     folium.Marker(
         location=[lat, lon],
-        icon=folium.Icon(color="black", icon="shopping-cart", prefix="fa"),
+        icon=BeautifyIcon(
+            icon="shopping-cart",
+            icon_shape="marker",
+            border_color=store_marker_color(),
+            background_color=store_marker_color(),
+            text_color="#FFFFFF",
+        ),
         tooltip=store_name,
     ).add_to(m)
 

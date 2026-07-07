@@ -12,7 +12,7 @@ import pandas as pd
 import streamlit as st
 from streamlit_folium import st_folium
 
-from lib.colors import facility_color
+from lib.colors import band_color, facility_color
 from lib.data import (
     load_filtered,
     stores_for_company,
@@ -36,13 +36,10 @@ def _company_image_zip(df: pd.DataFrame, company: str, prefectures: tuple, radiu
     return build_png_zip(df, names, radius)
 
 
-_HEADER_COLOR = "#7C3AED"
-
-
 def _header_html(store: str, radius: float) -> str:
     return (
         f'<div style="'
-        f"background-color:{_HEADER_COLOR};"
+        f"background-color:{band_color()};"
         f"color:#FFFFFF;height:64px;display:flex;align-items:center;"
         f"padding-left:24px;font-size:22px;font-weight:bold;"
         f"border-radius:8px;margin-bottom:12px;"
@@ -56,7 +53,7 @@ def _facility_list_html(fac) -> str:
     parts: list[str] = []
     parts.append(
         '<div style="'
-        f"background-color:{_HEADER_COLOR};"
+        f"background-color:{band_color()};"
         "color:#FFFFFF;height:40px;display:flex;align-items:center;"
         "justify-content:center;font-size:16px;font-weight:bold;"
         "border-radius:4px 4px 0 0;"
