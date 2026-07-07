@@ -6,6 +6,14 @@ All notable changes to this project are documented in this file.
 
 ### 2026-07-07
 
+- feat: 地図の背景（ベースマップ）を「テーマ設定」ページから選択可能に。**OpenStreetMap**（標準/
+  Humanitarian）・**国土地理院**（標準/淡色/航空写真/白地図）・**CARTO(OSMベース)**（Positron/Voyager/
+  Dark Matter）を提供元→スタイルの2段セレクトで切替。既定値は `config/theme.toml` `[map] basemap` で指定。
+  カタログは `lib/basemaps.py` に一元化し、対話地図(folium)・ダウンロードPNG(static_map) 双方へ反映。
+  タイル提供元の帰属表示を地図/PNGに表示し、`zoom_for_radius` は各ベースマップの最大ズームでクランプ。
+  [詳細](docs/history/20260707-1332-basemap-selector-plan.md) /
+  [結果](docs/history/20260707-1332-basemap-selector-result.md)
+
 - feat: 「テーマ設定」ページを追加し、配色を config から調整可能に。凡例（推進園区分）・
   半径円（線色＋塗り透明度）・見出し帯／施設リストヘッダー・店舗マーカーの色を `st.color_picker`
   で選び、`config/theme.toml` に保存すると地図とダウンロードPNGの双方へ反映される。配色は

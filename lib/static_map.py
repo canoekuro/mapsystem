@@ -25,7 +25,9 @@ from functools import lru_cache
 import requests
 from PIL import Image, ImageDraw, ImageFont
 
+from lib.basemaps import get_basemap
 from lib.colors import (
+    basemap_id,
     circle_color_rgb,
     circle_fill_opacity,
     facility_color_rgb,
@@ -40,8 +42,9 @@ logger = logging.getLogger(__name__)
 TILE_SIZE = 256
 _EARTH_RADIUS_KM = 6371.0
 
-# Tile source / identification (overridable for egress-restricted workspaces).
-_TILE_URL = os.getenv("OSM_TILE_URL", "https://tile.openstreetmap.org/{z}/{x}/{y}.png")
+# タイルURLは選択中のベースマップ（lib.basemaps / テーマ）から決まる。
+# OSM_TILE_URL 環境変数が設定されていれば、egress 制限ワークスペース向けにそれを優先する。
+_TILE_URL_OVERRIDE = os.getenv("OSM_TILE_URL") or None
 _USER_AGENT = os.getenv(
     "MAP_TILE_USER_AGENT", "mapsystem/1.0 (+https://github.com/canoekuro/mapsystem)"
 )
@@ -52,6 +55,8 @@ _WHITE = (255, 255, 255)
 _LEGEND_BG = (255, 255, 255)
 _LEGEND_BORDER = (229, 231, 235)    # #E5E7EB
 _LEGEND_TEXT = (17, 24, 39)         # #111827
+_ATTR_BG = (255, 255, 255)
+_ATTR_TEXT = (75, 85, 99)           # #4B5563
 
 # Font (IPAexGothic, same file png_builder uses)
 _FONT_PATH = os.path.join(os.path.dirname(__file__), "..", "fonts", "ipaexg.ttf")
@@ -100,6 +105,20 @@ def _draw_legend(draw: ImageDraw.ImageDraw, size: int) -> None:
         )
 
 
+def _draw_attribution(draw: ImageDraw.ImageDraw, size: int, text: str) -> None:
+    """タイル提供元の帰属表示を地図右下に描画する（OSM/GSI/CARTO とも必須）。"""
+    font = _font(11)
+    pad = 4
+    tw = draw.textlength(text, font=font)
+    th = 13
+    x1 = size - 6
+    y1 = size - 6
+    x0 = x1 - tw - pad * 2
+    y0 = y1 - th - pad * 2
+    draw.rectangle([x0, y0, x1, y1], fill=_ATTR_BG)
+    draw.text((x0 + pad, y0 + pad), text, font=font, fill=_ATTR_TEXT, anchor="lt")
+
+
 # --- Web Mercator projection ------------------------------------------------
 
 def _project(lat: float, lon: float, zoom: int) -> tuple[float, float]:
@@ -131,9 +150,9 @@ def _destination_point(lat: float, lon: float, bearing_deg: float, dist_km: floa
 # --- Tile fetching ----------------------------------------------------------
 
 @lru_cache(maxsize=2048)
-def _fetch_tile(z: int, x: int, y: int) -> bytes:
-    """Fetch a single OSM tile (cached across calls to dedupe bulk runs)."""
-    url = _TILE_URL.format(z=z, x=x, y=y)
+def _fetch_tile(z: int, x: int, y: int, url_template: str) -> bytes:
+    """Fetch a single raster tile (cached; keyed on url_template to avoid mixing basemaps)."""
+    url = url_template.format(z=z, x=x, y=y)
     resp = requests.get(url, headers={"User-Agent": _USER_AGENT}, timeout=_TILE_TIMEOUT)
     resp.raise_for_status()
     return resp.content
@@ -151,7 +170,9 @@ def render_static_map(store_row, facilities_df, radius_km: float, size: int = 65
     """
     clat = float(store_row["店舗lat"])
     clon = float(store_row["店舗lon"])
-    zoom = zoom_for_radius(radius_km, clat, viewport_px=size)
+    bm = get_basemap(basemap_id())
+    tile_url = _TILE_URL_OVERRIDE or bm["url"]
+    zoom = zoom_for_radius(radius_km, clat, viewport_px=size, max_zoom=bm["max_zoom"])
     n_tiles = 2 ** zoom
 
     cx, cy = _project(clat, clon, zoom)
@@ -174,7 +195,7 @@ def render_static_map(store_row, facilities_df, radius_km: float, size: int = 65
             if ty < 0 or ty >= n_tiles:
                 continue  # above/below the world — leave background
             txw = tx % n_tiles  # wrap longitude
-            tile_bytes = _fetch_tile(zoom, txw, ty)
+            tile_bytes = _fetch_tile(zoom, txw, ty, tile_url)
             tile_img = Image.open(io.BytesIO(tile_bytes)).convert("RGB")
             mosaic.paste(
                 tile_img,
@@ -231,6 +252,9 @@ def render_static_map(store_row, facilities_df, radius_km: float, size: int = 65
 
     # --- Legend (推進園区分の色分け凡例) ---
     _draw_legend(draw, size)
+
+    # --- Tile attribution (提供元の帰属表示、右下) ---
+    _draw_attribution(draw, size, bm["attribution"])
 
     out = io.BytesIO()
     base.convert("RGB").save(out, format="PNG")

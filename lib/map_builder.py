@@ -9,7 +9,9 @@ build_map(store_row, facilities_df, radius_km) -- build a folium.Map for a store
 import folium
 from folium.plugins import BeautifyIcon
 
+from lib.basemaps import get_basemap
 from lib.colors import (
+    basemap_id,
     circle_color,
     circle_fill_opacity,
     facility_color,
@@ -63,11 +65,14 @@ def build_map(store_row, facilities_df, radius_km: float) -> folium.Map:
     lon = store_row["店舗lon"]
     store_name = store_row["店舗名称"]
 
-    # --- 1. Map base ---
+    # --- 1. Map base (テーマで背景を選択, SPEC §6.1.2) ---
+    bm = get_basemap(basemap_id())
     m = folium.Map(
         location=[lat, lon],
-        zoom_start=zoom_for_radius(radius_km, lat, viewport_px=560),
-        tiles="OpenStreetMap",
+        zoom_start=zoom_for_radius(radius_km, lat, viewport_px=560, max_zoom=bm["max_zoom"]),
+        tiles=bm["url"],
+        attr=bm["attribution"],
+        max_zoom=bm["max_zoom"],
         width=700,
         height=560,
     )
