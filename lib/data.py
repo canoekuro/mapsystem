@@ -216,7 +216,11 @@ _MPP_ZOOM0 = 156543.03392
 
 
 def zoom_for_radius(
-    radius_km: float, lat: float = 35.0, viewport_px: int = 600, fraction: float = 0.8
+    radius_km: float,
+    lat: float = 35.0,
+    viewport_px: int = 600,
+    fraction: float = 0.8,
+    max_zoom: int = 19,
 ) -> int:
     """
     Return the largest zoom at which the radius circle fits in the viewport.
@@ -228,11 +232,13 @@ def zoom_for_radius(
         mpp(z) = 156543.03392 * cos(lat) / 2**z   (meters per pixel)
         want   diameter_m / mpp(z) <= fraction * viewport_px
 
-    Clamped to the OSM tile range [0, 19].
+    Clamped to ``[0, max_zoom]``.  *max_zoom* is the selected basemap's maximum
+    zoom (e.g. GSI styles cap below OSM's 19), so tiles are never requested at a
+    zoom the tile source does not serve.
     """
     diameter_m = 2.0 * radius_km * 1000.0
     target_mpp = (fraction * viewport_px) and (diameter_m / (fraction * viewport_px))
     if target_mpp <= 0:
-        return 19
+        return max_zoom
     z = math.floor(math.log2(_MPP_ZOOM0 * math.cos(math.radians(lat)) / target_mpp))
-    return max(0, min(19, int(z)))
+    return max(0, min(max_zoom, int(z)))

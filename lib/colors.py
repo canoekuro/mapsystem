@@ -15,6 +15,7 @@ facility_colors() / facility_color(cat) / facility_color_rgb(cat)
 circle_color() / circle_color_rgb() / circle_fill_opacity()
 band_color() / band_color_rgb()
 store_marker_color() / store_marker_color_rgb()
+basemap_id()
 hex_to_rgb(hex)
 get_theme() / reload_theme() / apply_overrides(values)
 save_theme(values) / theme_toml_text(values) / default_theme()
@@ -22,6 +23,8 @@ save_theme(values) / theme_toml_text(values) / default_theme()
 
 import copy
 import tomllib
+
+from lib import basemaps
 
 _THEME_CONFIG_PATH = "config/theme.toml"
 
@@ -37,6 +40,8 @@ _DEFAULTS: dict = {
     "circle_fill_opacity": 0.08,
     "band_color": "#7C3AED",
     "store_marker_color": "#111827",
+    # 地図の背景（ベースマップ）。id は lib/basemaps.BASEMAPS を参照。
+    "basemap": basemaps.DEFAULT_BASEMAP_ID,
 }
 
 # スカラー（色/小数）のキー順。TOML 手組みと設定ページの両方で使う。
@@ -60,13 +65,17 @@ def default_theme() -> dict:
 
 
 def _load_from_file() -> dict:
-    """config/theme.toml の [theme]（+ facility_colors）を読む。未存在時は空。"""
+    """config/theme.toml の [theme]（+ facility_colors）と [map] を読む。未存在時は空。"""
     try:
         with open(_THEME_CONFIG_PATH, "rb") as f:
             data = tomllib.load(f)
     except (FileNotFoundError, tomllib.TOMLDecodeError):
         return {}
-    return data.get("theme", {}) or {}
+    loaded = dict(data.get("theme", {}) or {})
+    map_section = data.get("map", {}) or {}
+    if "basemap" in map_section:
+        loaded["basemap"] = map_section["basemap"]
+    return loaded
 
 
 def _merge(base: dict, extra: dict) -> None:
@@ -80,6 +89,9 @@ def _merge(base: dict, extra: dict) -> None:
         elif key == "circle_fill_opacity":
             if isinstance(value, (int, float)):
                 base[key] = float(value)
+        elif key == "basemap":
+            if isinstance(value, str) and basemaps.is_valid(value):
+                base[key] = value
         elif key in _SCALAR_KEYS:
             if isinstance(value, str) and value:
                 base[key] = value
@@ -166,6 +178,12 @@ def store_marker_color_rgb() -> tuple[int, int, int]:
     return hex_to_rgb(store_marker_color())
 
 
+def basemap_id() -> str:
+    """選択中の地図ベースマップ id（未知値は既定へフォールバック）。"""
+    bid = get_theme().get("basemap", basemaps.DEFAULT_BASEMAP_ID)
+    return bid if basemaps.is_valid(bid) else basemaps.DEFAULT_BASEMAP_ID
+
+
 # --- persistence ------------------------------------------------------------
 
 def theme_toml_text(values: dict) -> str:
@@ -187,6 +205,12 @@ def theme_toml_text(values: dict) -> str:
     ]
     for cat, col in theme["facility_colors"].items():
         lines.append(f'"{cat}" = "{col}"')
+    lines += [
+        "",
+        "# 地図の背景（ベースマップ）。id は lib/basemaps.py の BASEMAPS を参照。",
+        "[map]",
+        f'basemap = "{theme["basemap"]}"',
+    ]
     return "\n".join(lines) + "\n"
 
 

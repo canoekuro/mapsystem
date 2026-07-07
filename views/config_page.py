@@ -1,9 +1,9 @@
 """
 テーマ設定ページ。
 
-凡例（推進園区分）・半径円・見出し帯・店舗マーカーの配色を画面から調整する。
-値は lib.colors のテーマ（config/theme.toml）を source of truth とし、「保存」で
-config/theme.toml を書き換える。Databricks Apps はファイルシステムが揮発性のため、
+凡例（推進園区分）・半径円・見出し帯・店舗マーカーの配色と、地図の背景（ベースマップ）を
+画面から調整する。値は lib.colors のテーマ（config/theme.toml）を source of truth とし、
+「保存」で config/theme.toml を書き換える。Databricks Apps はファイルシステムが揮発性のため、
 恒久化するには「設定TOMLをダウンロード」で得た内容をリポジトリにコミットすること。
 
 Public API
@@ -15,6 +15,7 @@ import logging
 
 import streamlit as st
 
+from lib import basemaps
 from lib import colors as theme
 
 logger = logging.getLogger(__name__)
@@ -33,6 +34,9 @@ def _facility_key(category: str) -> str:
     return f"cfg_facility_{category}"
 
 
+_BASEMAP_KEY = "cfg_basemap"
+
+
 def _init_state() -> None:
     """未初期化のウィジェット状態を現在のテーマ値で埋める。"""
     current = theme.get_theme()
@@ -41,6 +45,7 @@ def _init_state() -> None:
     st.session_state.setdefault(_OPACITY_KEY, float(current["circle_fill_opacity"]))
     for category, color in current["facility_colors"].items():
         st.session_state.setdefault(_facility_key(category), color)
+    st.session_state.setdefault(_BASEMAP_KEY, theme.basemap_id())
 
 
 def _reset_to_default() -> None:
@@ -51,6 +56,11 @@ def _reset_to_default() -> None:
     st.session_state[_OPACITY_KEY] = float(d["circle_fill_opacity"])
     for category, color in d["facility_colors"].items():
         st.session_state[_facility_key(category)] = color
+    # ベースマップと、それに連動する提供元/スタイルのウィジェット状態も既定へ。
+    st.session_state[_BASEMAP_KEY] = d["basemap"]
+    default_provider = basemaps.get_basemap(d["basemap"])["provider"]
+    st.session_state["cfg_map_provider"] = default_provider
+    st.session_state[f"cfg_map_style_{default_provider}"] = basemaps.get_basemap(d["basemap"])["label"]
 
 
 def _collect_values(categories: list[str]) -> dict:
@@ -60,7 +70,32 @@ def _collect_values(categories: list[str]) -> dict:
     values["facility_colors"] = {
         cat: st.session_state[_facility_key(cat)] for cat in categories
     }
+    values["basemap"] = st.session_state[_BASEMAP_KEY]
     return values
+
+
+def _basemap_selector() -> None:
+    """提供元→スタイルの2段セレクトで地図の背景を選ぶ。結果を session_state に反映。"""
+    current_id = st.session_state[_BASEMAP_KEY]
+    current_provider = basemaps.get_basemap(current_id)["provider"]
+
+    provider_opts = basemaps.providers()
+    st.session_state.setdefault("cfg_map_provider", current_provider)
+    p1, p2 = st.columns(2)
+    with p1:
+        provider = st.selectbox("提供元", provider_opts, key="cfg_map_provider")
+
+    opts = basemaps.basemaps_for_provider(provider)
+    labels = [cfg["label"] for _bid, cfg in opts]
+    ids = [bid for bid, _cfg in opts]
+    style_key = f"cfg_map_style_{provider}"
+    # 提供元に現在の basemap が属していればそのラベル、なければ先頭を既定に。
+    default_label = basemaps.get_basemap(current_id)["label"] if current_id in ids else labels[0]
+    st.session_state.setdefault(style_key, default_label)
+    with p2:
+        label = st.selectbox("スタイル", labels, key=style_key)
+
+    st.session_state[_BASEMAP_KEY] = ids[labels.index(label)]
 
 
 def _preview_html(values: dict) -> str:
@@ -123,7 +158,7 @@ def render() -> None:
     """Render the theme-config page."""
     st.header("テーマ設定")
     st.info(
-        "凡例（推進園区分）・半径円・見出し帯・店舗マーカーの色を調整できます。"
+        "凡例（推進園区分）・半径円・見出し帯・店舗マーカーの色と、地図の背景を調整できます。"
         "「保存」で config/theme.toml に書き込み、地図とダウンロードPNGの両方へ反映されます。"
     )
 
@@ -155,7 +190,13 @@ def render() -> None:
     with b2:
         st.color_picker("店舗マーカー色", key="cfg_store_marker_color")
 
+    st.subheader("地図の背景")
+    _basemap_selector()
+
     values = _collect_values(categories)
+
+    bm = basemaps.get_basemap(values["basemap"])
+    st.caption(f"選択中の背景: {bm['provider']} / {bm['label']}　｜　帰属表示: {bm['attribution']}")
 
     st.subheader("プレビュー")
     st.markdown(_preview_html(values), unsafe_allow_html=True)
