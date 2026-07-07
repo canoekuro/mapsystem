@@ -49,9 +49,9 @@ CARD_BG = "#FFFFFF"
 CARD_BORDER = "#E5E7EB"
 
 _FACILITY_COLORS = {
-    "保育園": "#22C55E",
+    "認可保育所": "#22C55E",
+    "認定こども園": "#F59E0B",
     "幼稚園": "#EF4444",
-    "こども園": "#F59E0B",
 }
 _FALLBACK_COLOR = "#6B7280"
 

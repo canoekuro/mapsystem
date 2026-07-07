@@ -4,6 +4,16 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+### 2026-07-07
+
+- feat: `推進園区分`（`認可保育所` / `認定こども園` / `幼稚園`）による地図・施設リストの色分けを
+  実データに整合。色分けテーブル（`map_builder` / `png_builder` / `static_map` / `main_page` の
+  4箇所）が旧区分名をキーにしており `認可保育所` / `認定こども園` がフォールバック色に落ちて
+  いた不具合を修正（緑=認可保育所 / 黄=認定こども園 / 赤=幼稚園）。あわせてサンプル生成
+  （`gen_sample.py` / `master.csv`）と SPEC を実値へ整合。凡例は追加しない。
+  [詳細](docs/history/20260707-0906-suisinen-category-color-plan.md) /
+  [結果](docs/history/20260707-0906-suisinen-category-color-result.md)
+
 ### 2026-06-29
 
 - fix: 地図の凡例（保育園 / 幼稚園 / こども園）を画面の地図とダウンロードPNGの両方から削除。

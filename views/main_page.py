@@ -35,7 +35,7 @@ def _company_image_zip(df: pd.DataFrame, company: str, prefectures: tuple, radiu
     return build_png_zip(df, names, radius)
 
 
-_FACILITY_COLORS = {"保育園": "#22C55E", "幼稚園": "#EF4444", "こども園": "#F59E0B"}
+_FACILITY_COLORS = {"認可保育所": "#22C55E", "認定こども園": "#F59E0B", "幼稚園": "#EF4444"}
 _FALLBACK_COLOR = "#6B7280"
 _HEADER_COLOR = "#7C3AED"
 

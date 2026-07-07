@@ -43,9 +43,9 @@ _TILE_TIMEOUT = float(os.getenv("MAP_TILE_TIMEOUT", "15"))
 _PURPLE = (124, 58, 237)            # #7C3AED
 _WHITE = (255, 255, 255)
 _FACILITY_COLORS = {
-    "保育園": (34, 197, 94),        # #22C55E
+    "認可保育所": (34, 197, 94),     # #22C55E
+    "認定こども園": (245, 158, 11),  # #F59E0B
     "幼稚園": (239, 68, 68),        # #EF4444
-    "こども園": (245, 158, 11),     # #F59E0B
 }
 _FALLBACK_COLOR = (107, 114, 128)   # #6B7280
 _STORE_COLOR = (17, 24, 39)         # near-black
