@@ -1,32 +1,114 @@
 """
-推進園区分の色定義（SPEC §6.1.2）。
+配色テーマの単一の入口（SPEC §6.1.2 / §8.3）。
 
-地図（folium）・ダウンロードPNG・静的PNG・施設リストで共有する唯一の色定義。
-ここを変更すれば全描画に反映される（旧来は各モジュールに重複定義され、実データの
-区分名変更時に一部だけが取り残される不具合の温床だった）。
+地図（folium）・ダウンロードPNG・静的PNG・施設リスト・凡例で共有する唯一の色定義。
+値は ``config/theme.toml`` の ``[theme]`` / ``[theme.facility_colors]`` から読み込み、
+未設定・不正時は組み込み既定（``_DEFAULTS``）へフォールバックする。
+「テーマ設定」ページ（views/config_page.py）がこのファイルを書き換えて配色を調整する。
 
-``FACILITY_COLORS`` の定義順は凡例の表示順を兼ねる。
+**描画時に解決すること**が肝で、各アクセサは import 時の定数ではなく関数として提供する
+（保存やプレビュー反映後の再描画で最新テーマが反映されるようにするため）。
+
+Public API
+----------
+facility_colors() / facility_color(cat) / facility_color_rgb(cat)
+circle_color() / circle_color_rgb() / circle_fill_opacity()
+band_color() / band_color_rgb()
+store_marker_color() / store_marker_color_rgb()
+hex_to_rgb(hex)
+get_theme() / reload_theme() / apply_overrides(values)
+save_theme(values) / theme_toml_text(values) / default_theme()
 """
 
-# 推進園区分 -> 背景色（16進 "#RRGGBB"）。
-# 認可保育所/認定こども園 が紛らわしいという指摘を受け、色覚多様性にも配慮した
-# 高コントラストな3色（青/橙/紫）へ変更。紛らわしかった2区分（認可保育所・認定こども園）は
-# 最も離れた色対（青↔橙）に割り当てている。白抜き番号が読めるよう各色は十分に濃い。
-# 色の分離は dataviz スキルの validate_palette で検証済み（隣接CVD ΔE ≥ 16.6, 目標12以上）。
-FACILITY_COLORS: dict[str, str] = {
-    "認可保育所": "#2A78D6",   # 青
-    "認定こども園": "#EB6834",  # 橙
-    "幼稚園": "#4A3AA7",       # 紫
+import copy
+import tomllib
+
+_THEME_CONFIG_PATH = "config/theme.toml"
+
+# 組み込み既定（config/theme.toml と同値）。ファイル未設定・キー欠損時のフォールバック。
+_DEFAULTS: dict = {
+    "facility_colors": {
+        "認可保育所": "#2A78D6",   # 青
+        "認定こども園": "#EB6834",  # 橙
+        "幼稚園": "#4A3AA7",       # 紫
+    },
+    "facility_fallback": "#6B7280",   # 灰
+    "circle_color": "#7C3AED",
+    "circle_fill_opacity": 0.08,
+    "band_color": "#7C3AED",
+    "store_marker_color": "#111827",
 }
 
-# 想定外 / 区分なしのフォールバック色（灰）。
-FALLBACK_COLOR = "#6B7280"
+# スカラー（色/小数）のキー順。TOML 手組みと設定ページの両方で使う。
+_SCALAR_KEYS = (
+    "facility_fallback",
+    "circle_color",
+    "circle_fill_opacity",
+    "band_color",
+    "store_marker_color",
+)
+
+# defaults <- file <- overrides のマージ結果。get_theme() でキャッシュし save/apply で無効化。
+_cache: dict | None = None
+# プロセス内オーバーライド（読取専用FS でのプレビュー即時反映用）。
+_overrides: dict = {}
 
 
-def facility_color(category: str) -> str:
-    """推進園区分に対応する16進色を返す（未知値はフォールバック色）。"""
-    return FACILITY_COLORS.get(category, FALLBACK_COLOR)
+def default_theme() -> dict:
+    """組み込み既定テーマの複製を返す。"""
+    return copy.deepcopy(_DEFAULTS)
 
+
+def _load_from_file() -> dict:
+    """config/theme.toml の [theme]（+ facility_colors）を読む。未存在時は空。"""
+    try:
+        with open(_THEME_CONFIG_PATH, "rb") as f:
+            data = tomllib.load(f)
+    except (FileNotFoundError, tomllib.TOMLDecodeError):
+        return {}
+    return data.get("theme", {}) or {}
+
+
+def _merge(base: dict, extra: dict) -> None:
+    """extra の有効な値を base へ上書きマージ（facility_colors はキー単位で合成）。"""
+    for key, value in extra.items():
+        if key == "facility_colors" and isinstance(value, dict):
+            fc = base.setdefault("facility_colors", {})
+            for cat, col in value.items():
+                if isinstance(col, str) and col:
+                    fc[cat] = col
+        elif key == "circle_fill_opacity":
+            if isinstance(value, (int, float)):
+                base[key] = float(value)
+        elif key in _SCALAR_KEYS:
+            if isinstance(value, str) and value:
+                base[key] = value
+
+
+def get_theme() -> dict:
+    """既定 <- config/theme.toml <- プロセス内オーバーライド をマージしたテーマを返す。"""
+    global _cache
+    if _cache is None:
+        theme = default_theme()
+        _merge(theme, _load_from_file())
+        _merge(theme, _overrides)
+        _cache = theme
+    return _cache
+
+
+def reload_theme() -> None:
+    """キャッシュを破棄し、次回 get_theme() でファイルから再読込させる。"""
+    global _cache
+    _cache = None
+
+
+def apply_overrides(values: dict) -> None:
+    """プロセス内オーバーライドを差し込む（読取専用FS でのプレビュー即時反映用）。"""
+    _merge(_overrides, values)
+    reload_theme()
+
+
+# --- render-time accessors --------------------------------------------------
 
 def hex_to_rgb(hex_color: str) -> tuple[int, int, int]:
     """``"#RRGGBB"`` を ``(R, G, B)`` タプルへ変換する。"""
@@ -34,6 +116,88 @@ def hex_to_rgb(hex_color: str) -> tuple[int, int, int]:
     return int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
 
 
+def facility_colors() -> dict[str, str]:
+    """推進園区分 -> 色 の辞書（定義順は凡例の表示順）。"""
+    return get_theme()["facility_colors"]
+
+
+def facility_color(category: str) -> str:
+    """推進園区分に対応する16進色を返す（未知値はフォールバック色）。"""
+    return facility_colors().get(category, get_theme()["facility_fallback"])
+
+
 def facility_color_rgb(category: str) -> tuple[int, int, int]:
     """推進園区分に対応する ``(R, G, B)`` タプルを返す（未知値はフォールバック色）。"""
     return hex_to_rgb(facility_color(category))
+
+
+def circle_color() -> str:
+    """半径円の線色（16進）。"""
+    return get_theme()["circle_color"]
+
+
+def circle_color_rgb() -> tuple[int, int, int]:
+    """半径円の線色（RGB）。"""
+    return hex_to_rgb(circle_color())
+
+
+def circle_fill_opacity() -> float:
+    """半径円の塗り透明度（0.0–1.0）。"""
+    return float(get_theme()["circle_fill_opacity"])
+
+
+def band_color() -> str:
+    """見出し帯・施設リストヘッダーの背景色（16進）。"""
+    return get_theme()["band_color"]
+
+
+def band_color_rgb() -> tuple[int, int, int]:
+    """見出し帯の背景色（RGB）。"""
+    return hex_to_rgb(band_color())
+
+
+def store_marker_color() -> str:
+    """中心の店舗マーカー色（16進）。"""
+    return get_theme()["store_marker_color"]
+
+
+def store_marker_color_rgb() -> tuple[int, int, int]:
+    """中心の店舗マーカー色（RGB）。"""
+    return hex_to_rgb(store_marker_color())
+
+
+# --- persistence ------------------------------------------------------------
+
+def theme_toml_text(values: dict) -> str:
+    """*values*（get_theme() 形式）を config/theme.toml と同じ書式の TOML 文字列にする。"""
+    theme = default_theme()
+    _merge(theme, values)
+    lines = [
+        "# 画面・PNG の配色テーマ設定（SPEC §6.1.2 / §8.3）。",
+        "# 「テーマ設定」ページで生成。値は 16進カラー（circle_fill_opacity のみ 0.0–1.0）。",
+        "",
+        "[theme]",
+        f'facility_fallback   = "{theme["facility_fallback"]}"',
+        f'circle_color        = "{theme["circle_color"]}"',
+        f"circle_fill_opacity = {theme['circle_fill_opacity']}",
+        f'band_color          = "{theme["band_color"]}"',
+        f'store_marker_color  = "{theme["store_marker_color"]}"',
+        "",
+        "[theme.facility_colors]",
+    ]
+    for cat, col in theme["facility_colors"].items():
+        lines.append(f'"{cat}" = "{col}"')
+    return "\n".join(lines) + "\n"
+
+
+def save_theme(values: dict) -> str:
+    """*values* を config/theme.toml へ書き込み、テーマを再読込する。
+
+    書き込みに失敗（読取専用FS 等）した場合は例外を送出する（呼び出し側で処理）。
+    成功時は書き込んだパスを返す。
+    """
+    text = theme_toml_text(values)
+    with open(_THEME_CONFIG_PATH, "w", encoding="utf-8") as f:
+        f.write(text)
+    reload_theme()
+    return _THEME_CONFIG_PATH

@@ -25,7 +25,14 @@ from functools import lru_cache
 import requests
 from PIL import Image, ImageDraw, ImageFont
 
-from lib.colors import FACILITY_COLORS, facility_color_rgb, hex_to_rgb
+from lib.colors import (
+    circle_color_rgb,
+    circle_fill_opacity,
+    facility_color_rgb,
+    facility_colors,
+    hex_to_rgb,
+    store_marker_color_rgb,
+)
 from lib.data import zoom_for_radius
 
 logger = logging.getLogger(__name__)
@@ -40,13 +47,11 @@ _USER_AGENT = os.getenv(
 )
 _TILE_TIMEOUT = float(os.getenv("MAP_TILE_TIMEOUT", "15"))
 
-# Colors (推進園区分 mapping lives in lib.colors; SPEC §6.1.2)
-_PURPLE = (124, 58, 237)            # #7C3AED
+# Colors: 推進園区分・半径円・店舗マーカーは lib.colors（テーマ）から取得する（SPEC §6.1.2）。
 _WHITE = (255, 255, 255)
 _LEGEND_BG = (255, 255, 255)
 _LEGEND_BORDER = (229, 231, 235)    # #E5E7EB
 _LEGEND_TEXT = (17, 24, 39)         # #111827
-_STORE_COLOR = (17, 24, 39)         # near-black
 
 # Font (IPAexGothic, same file png_builder uses)
 _FONT_PATH = os.path.join(os.path.dirname(__file__), "..", "fonts", "ipaexg.ttf")
@@ -66,7 +71,7 @@ def _draw_legend(draw: ImageDraw.ImageDraw, size: int) -> None:
     row_h = 18
     dot_r = 6
     title_h = 18
-    items = list(FACILITY_COLORS.items())
+    items = list(facility_colors().items())
 
     text_w = max(draw.textlength(cat, font=item_font) for cat, _ in items)
     title_w = draw.textlength("推進園区分", font=title_font)
@@ -185,13 +190,15 @@ def render_static_map(store_row, facilities_df, radius_km: float, size: int = 65
         gx, gy = _project(lat, lon, zoom)
         return gx - left, gy - top
 
-    # --- Radius circle (geodesic polygon, translucent fill) ---
+    # --- Radius circle (geodesic polygon, translucent fill; テーマ調整可) ---
+    circle_rgb = circle_color_rgb()
+    fill_alpha = int(round(circle_fill_opacity() * 255))
     overlay = Image.new("RGBA", base.size, (0, 0, 0, 0))
     odraw = ImageDraw.Draw(overlay)
     ring = [to_px(*_destination_point(clat, clon, b * 5, radius_km)) for b in range(72)]
-    odraw.polygon(ring, fill=(*_PURPLE, 20), outline=(*_PURPLE, 255))
+    odraw.polygon(ring, fill=(*circle_rgb, fill_alpha), outline=(*circle_rgb, 255))
     # thicken the outline a touch
-    odraw.line(ring + [ring[0]], fill=(*_PURPLE, 255), width=2)
+    odraw.line(ring + [ring[0]], fill=(*circle_rgb, 255), width=2)
     base = Image.alpha_composite(base, overlay)
 
     draw = ImageDraw.Draw(base)
@@ -210,12 +217,13 @@ def render_static_map(store_row, facilities_df, radius_km: float, size: int = 65
         )
         draw.text((px, py), str(int(row["連番"])), font=badge_font, fill=(*_WHITE, 255), anchor="mm")
 
-    # --- Store marker (distinct dark marker at center) ---
+    # --- Store marker (distinct marker at center; テーマ調整可) ---
+    store_rgb = store_marker_color_rgb()
     sx, sy = to_px(clat, clon)
     sr = 12
     draw.ellipse(
         [sx - sr, sy - sr, sx + sr, sy + sr],
-        fill=(*_STORE_COLOR, 255),
+        fill=(*store_rgb, 255),
         outline=(*_WHITE, 255),
         width=3,
     )

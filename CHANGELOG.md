@@ -6,6 +6,14 @@ All notable changes to this project are documented in this file.
 
 ### 2026-07-07
 
+- feat: 「テーマ設定」ページを追加し、配色を config から調整可能に。凡例（推進園区分）・
+  半径円（線色＋塗り透明度）・見出し帯／施設リストヘッダー・店舗マーカーの色を `st.color_picker`
+  で選び、`config/theme.toml` に保存すると地図とダウンロードPNGの双方へ反映される。配色は
+  `lib/colors.py` のテーマに一元化し、各描画のハードコード（`#7C3AED` ×4 等）を撤去。店舗マーカーは
+  任意の hex 色を指定できるよう `BeautifyIcon` 化。Databricks Apps は FS 揮発性のため保存の恒久化は
+  「設定TOMLをダウンロード」→リポジトリにコミットで行う（UI で誘導）。
+  [詳細](docs/history/20260707-1002-theme-config-page-plan.md) /
+  [結果](docs/history/20260707-1002-theme-config-page-result.md)
 - fix: 推進園区分の色分けを区別しやすい配色へ変更。認可保育所（緑）と認定こども園（黄）が
   紛らわしいという実機フィードバックを受け、色覚多様性にも配慮した高コントラストな3色
   （認可保育所=青 `#2A78D6` / 認定こども園=橙 `#EB6834` / 幼稚園=紫 `#4A3AA7`）へ更新。

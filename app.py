@@ -16,7 +16,7 @@ import logging
 import streamlit as st
 
 from lib.data import load_company_names, load_table_last_updated
-from views import main_page, upload_page
+from views import config_page, main_page, upload_page
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -45,6 +45,10 @@ def _upload_page() -> None:
     upload_page.render()
 
 
+def _config_page() -> None:
+    config_page.render()
+
+
 def main() -> None:
     st.set_page_config(page_title="店舗周辺マップ", layout="wide")
     _render_last_updated()  # 共通: 両ページの上部に表示
@@ -52,6 +56,7 @@ def main() -> None:
         [
             st.Page(_map_page, title="マップ", default=True),
             st.Page(_upload_page, title="データ更新"),
+            st.Page(_config_page, title="テーマ設定"),
         ]
     )
     nav.run()
