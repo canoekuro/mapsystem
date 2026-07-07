@@ -6,6 +6,13 @@ All notable changes to this project are documented in this file.
 
 ### 2026-07-07
 
+- feat: 推進園区分の色分け凡例（認可保育所 / 認定こども園 / 幼稚園）を地図左下に表示。
+  インタラクティブ地図（folium）は HTML 凡例を重ね、ダウンロード/静的PNG は地図画像へ
+  凡例を焼き込む。あわせて4箇所（`map_builder` / `png_builder` / `static_map` / `main_page`）に
+  重複していた色定義を `lib/colors.py` に一元化し、区分名ドリフトの再発を防止。SPEC §6.1.2 を更新。
+  [詳細](docs/history/20260707-0935-legend-and-color-consolidation-plan.md) /
+  [結果](docs/history/20260707-0935-legend-and-color-consolidation-result.md)
+
 - feat: `推進園区分`（`認可保育所` / `認定こども園` / `幼稚園`）による地図・施設リストの色分けを
   実データに整合。色分けテーブル（`map_builder` / `png_builder` / `static_map` / `main_page` の
   4箇所）が旧区分名をキーにしており `認可保育所` / `認定こども園` がフォールバック色に落ちて

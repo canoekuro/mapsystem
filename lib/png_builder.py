@@ -20,6 +20,7 @@ import os
 
 from PIL import Image, ImageDraw, ImageFont
 
+from lib.colors import facility_color
 from lib.static_map import render_static_map
 
 logger = logging.getLogger(__name__)
@@ -47,13 +48,6 @@ NAME_COLOR = "#111827"
 DIST_COLOR = "#6B7280"
 CARD_BG = "#FFFFFF"
 CARD_BORDER = "#E5E7EB"
-
-_FACILITY_COLORS = {
-    "認可保育所": "#22C55E",
-    "認定こども園": "#F59E0B",
-    "幼稚園": "#EF4444",
-}
-_FALLBACK_COLOR = "#6B7280"
 
 # --- Font ------------------------------------------------------------------
 _FONT_PATH = os.path.join(os.path.dirname(__file__), "..", "fonts", "ipaexg.ttf")
@@ -169,7 +163,7 @@ def compose_canvas(
         top = LIST_TOP + i * CARD_H
         cy = top + CARD_H / 2
 
-        color = _FACILITY_COLORS.get(row["推進園区分"], _FALLBACK_COLOR)
+        color = facility_color(row["推進園区分"])
         number = int(row["連番"])
 
         # number badge (filled circle)
