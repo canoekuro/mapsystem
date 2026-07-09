@@ -12,7 +12,7 @@ import pandas as pd
 import streamlit as st
 from streamlit_folium import st_folium
 
-from lib.colors import band_color, facility_color
+from lib.colors import band_color, facility_color, map_height, map_width
 from lib.data import (
     load_filtered,
     stores_for_company,
@@ -285,8 +285,8 @@ def render(companies: list[str]) -> None:
         with col_map:
             st_folium(
                 build_map(srow, fac, loaded_fetch_radius),
-                width=700,
-                height=560,
+                width=map_width(),
+                height=map_height(),
                 key=f"map_{store}_{loaded_fetch_radius}_{nonce}",
             )
         with col_list:

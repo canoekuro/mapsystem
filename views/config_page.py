@@ -35,6 +35,8 @@ def _facility_key(category: str) -> str:
 
 
 _BASEMAP_KEY = "cfg_basemap"
+_MAP_WIDTH_KEY = "cfg_map_width"
+_MAP_HEIGHT_KEY = "cfg_map_height"
 
 
 def _init_state() -> None:
@@ -46,6 +48,8 @@ def _init_state() -> None:
     for category, color in current["facility_colors"].items():
         st.session_state.setdefault(_facility_key(category), color)
     st.session_state.setdefault(_BASEMAP_KEY, theme.basemap_id())
+    st.session_state.setdefault(_MAP_WIDTH_KEY, int(current["map_width"]))
+    st.session_state.setdefault(_MAP_HEIGHT_KEY, int(current["map_height"]))
 
 
 def _reset_to_default() -> None:
@@ -61,6 +65,8 @@ def _reset_to_default() -> None:
     default_provider = basemaps.get_basemap(d["basemap"])["provider"]
     st.session_state["cfg_map_provider"] = default_provider
     st.session_state[f"cfg_map_style_{default_provider}"] = basemaps.get_basemap(d["basemap"])["label"]
+    st.session_state[_MAP_WIDTH_KEY] = int(d["map_width"])
+    st.session_state[_MAP_HEIGHT_KEY] = int(d["map_height"])
 
 
 def _collect_values(categories: list[str]) -> dict:
@@ -71,6 +77,8 @@ def _collect_values(categories: list[str]) -> dict:
         cat: st.session_state[_facility_key(cat)] for cat in categories
     }
     values["basemap"] = st.session_state[_BASEMAP_KEY]
+    values["map_width"] = int(st.session_state[_MAP_WIDTH_KEY])
+    values["map_height"] = int(st.session_state[_MAP_HEIGHT_KEY])
     return values
 
 
@@ -192,6 +200,18 @@ def render() -> None:
 
     st.subheader("地図の背景")
     _basemap_selector()
+
+    st.subheader("地図サイズ（画面表示）")
+    st.caption("マップページの対話地図の大きさ（px）。ダウンロードPNGのサイズは変わりません。")
+    s1, s2 = st.columns(2)
+    with s1:
+        st.number_input(
+            "幅(px)", min_value=500, max_value=1200, step=20, key=_MAP_WIDTH_KEY
+        )
+    with s2:
+        st.number_input(
+            "高さ(px)", min_value=400, max_value=1000, step=20, key=_MAP_HEIGHT_KEY
+        )
 
     values = _collect_values(categories)
 

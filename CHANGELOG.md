@@ -6,6 +6,14 @@ All notable changes to this project are documented in this file.
 
 ### 2026-07-09
 
+- feat: 対話地図（画面表示）のサイズ（幅・高さ px）を「テーマ設定」ページから調整可能に。
+  `config/theme.toml` `[map] map_width`/`map_height` に保存し、`lib/colors.map_width()`/
+  `map_height()` で描画時に解決して `st_folium`（`views/main_page.py`）と `folium.Map`
+  （`lib/map_builder.py`）へ同一値を渡す（`zoom_for_radius` の基準も高さに連動）。既定は
+  現行と同じ `700×560`。ダウンロードPNGのサイズは対象外。
+  [詳細](docs/history/20260709-0338-map-size-config-plan.md) /
+  [結果](docs/history/20260709-0338-map-size-config-result.md)
+
 - refactor: 表示半径の設定を廃止し、取得半径をそのまま表示に使用（取得半径＝表示半径）。
   単一ページ画面から「表示半径」ウィジェットを撤去し、ヘッダー・件数・地図・施設リストは
   取得半径で描画する。SPEC §8.2 の二段絞り込み仕様を改訂。

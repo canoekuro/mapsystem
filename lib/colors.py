@@ -16,6 +16,7 @@ circle_color() / circle_color_rgb() / circle_fill_opacity()
 band_color() / band_color_rgb()
 store_marker_color() / store_marker_color_rgb()
 basemap_id()
+map_width() / map_height()
 hex_to_rgb(hex)
 get_theme() / reload_theme() / apply_overrides(values)
 save_theme(values) / theme_toml_text(values) / default_theme()
@@ -42,7 +43,14 @@ _DEFAULTS: dict = {
     "store_marker_color": "#111827",
     # 地図の背景（ベースマップ）。id は lib/basemaps.BASEMAPS を参照。
     "basemap": basemaps.DEFAULT_BASEMAP_ID,
+    # 対話地図（画面表示）のサイズ（px）。
+    "map_width": 700,
+    "map_height": 560,
 }
+
+# 対話地図サイズ（px）の許容範囲。設定ページの入力・TOML 値の両方をこの範囲にクランプする。
+_MAP_SIZE_MIN = 200
+_MAP_SIZE_MAX = 2000
 
 # スカラー（色/小数）のキー順。TOML 手組みと設定ページの両方で使う。
 _SCALAR_KEYS = (
@@ -73,8 +81,9 @@ def _load_from_file() -> dict:
         return {}
     loaded = dict(data.get("theme", {}) or {})
     map_section = data.get("map", {}) or {}
-    if "basemap" in map_section:
-        loaded["basemap"] = map_section["basemap"]
+    for key in ("basemap", "map_width", "map_height"):
+        if key in map_section:
+            loaded[key] = map_section[key]
     return loaded
 
 
@@ -92,6 +101,9 @@ def _merge(base: dict, extra: dict) -> None:
         elif key == "basemap":
             if isinstance(value, str) and basemaps.is_valid(value):
                 base[key] = value
+        elif key in ("map_width", "map_height"):
+            if isinstance(value, (int, float)) and value > 0:
+                base[key] = max(_MAP_SIZE_MIN, min(_MAP_SIZE_MAX, int(value)))
         elif key in _SCALAR_KEYS:
             if isinstance(value, str) and value:
                 base[key] = value
@@ -184,6 +196,16 @@ def basemap_id() -> str:
     return bid if basemaps.is_valid(bid) else basemaps.DEFAULT_BASEMAP_ID
 
 
+def map_width() -> int:
+    """対話地図（画面表示）の幅（px）。"""
+    return int(get_theme()["map_width"])
+
+
+def map_height() -> int:
+    """対話地図（画面表示）の高さ（px）。半径円が収まるズーム算出の基準にも使う。"""
+    return int(get_theme()["map_height"])
+
+
 # --- persistence ------------------------------------------------------------
 
 def theme_toml_text(values: dict) -> str:
@@ -210,6 +232,9 @@ def theme_toml_text(values: dict) -> str:
         "# 地図の背景（ベースマップ）。id は lib/basemaps.py の BASEMAPS を参照。",
         "[map]",
         f'basemap = "{theme["basemap"]}"',
+        "# 対話地図（画面表示）のサイズ（px）。",
+        f'map_width  = {int(theme["map_width"])}',
+        f'map_height = {int(theme["map_height"])}',
     ]
     return "\n".join(lines) + "\n"
 
