@@ -15,6 +15,7 @@ import logging
 
 import streamlit as st
 
+from lib.app_config import show_theme_page
 from lib.data import load_company_names, load_table_last_updated
 from views import config_page, main_page, upload_page
 
@@ -52,13 +53,14 @@ def _config_page() -> None:
 def main() -> None:
     st.set_page_config(page_title="店舗周辺マップ", layout="wide")
     _render_last_updated()  # 共通: 両ページの上部に表示
-    nav = st.navigation(
-        [
-            st.Page(_map_page, title="マップ", default=True),
-            st.Page(_upload_page, title="データ更新"),
-            st.Page(_config_page, title="テーマ設定"),
-        ]
-    )
+    pages = [
+        st.Page(_map_page, title="マップ", default=True),
+        st.Page(_upload_page, title="データ更新"),
+    ]
+    # 「テーマ設定」ページは config/app_config.toml [ui] show_theme_page で出し分け（既定は非表示）。
+    if show_theme_page():
+        pages.append(st.Page(_config_page, title="テーマ設定"))
+    nav = st.navigation(pages)
     nav.run()
 
 

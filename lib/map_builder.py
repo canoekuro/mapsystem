@@ -16,6 +16,8 @@ from lib.colors import (
     circle_fill_opacity,
     facility_color,
     facility_colors,
+    map_height,
+    map_width,
     store_marker_color,
 )
 from lib.data import zoom_for_radius
@@ -65,16 +67,18 @@ def build_map(store_row, facilities_df, radius_km: float) -> folium.Map:
     lon = store_row["店舗lon"]
     store_name = store_row["店舗名称"]
 
-    # --- 1. Map base (テーマで背景を選択, SPEC §6.1.2) ---
+    # --- 1. Map base (テーマで背景・サイズを選択, SPEC §6.1.2) ---
     bm = get_basemap(basemap_id())
+    m_width = map_width()
+    m_height = map_height()
     m = folium.Map(
         location=[lat, lon],
-        zoom_start=zoom_for_radius(radius_km, lat, viewport_px=560, max_zoom=bm["max_zoom"]),
+        zoom_start=zoom_for_radius(radius_km, lat, viewport_px=m_height, max_zoom=bm["max_zoom"]),
         tiles=bm["url"],
         attr=bm["attribution"],
         max_zoom=bm["max_zoom"],
-        width=700,
-        height=560,
+        width=m_width,
+        height=m_height,
     )
 
     # --- 2. Radius circle (SPEC §6.1.2, テーマ調整可) ---
