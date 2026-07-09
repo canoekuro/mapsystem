@@ -6,6 +6,24 @@ All notable changes to this project are documented in this file.
 
 ### 2026-07-09
 
+- refactor: 表示半径の設定を廃止し、取得半径をそのまま表示に使用（取得半径＝表示半径）。
+  単一ページ画面から「表示半径」ウィジェットを撤去し、ヘッダー・件数・地図・施設リストは
+  取得半径で描画する。SPEC §8.2 の二段絞り込み仕様を改訂。
+  [詳細](docs/history/20260709-0255-issue20260709-radius-pref-configtab-plan.md) /
+  [結果](docs/history/20260709-0255-issue20260709-radius-pref-configtab-result.md)
+
+- feat: 小売店名称の絞り込みに都道府県（単一選択・任意）を追加。絞り込み順を
+  `企業名称 → 取得半径 →（データ取得）→ 都道府県 → 小売店名称` とし、都道府県と小売店名称を
+  横並び配置。都道府県未選択なら企業内の全店舗、選択でその県の店舗のみを候補にする。
+  [詳細](docs/history/20260709-0255-issue20260709-radius-pref-configtab-plan.md) /
+  [結果](docs/history/20260709-0255-issue20260709-radius-pref-configtab-result.md)
+
+- feat: 「テーマ設定」タブの表示/非表示を `config/app_config.toml` の `[ui] show_theme_page`
+  で切替可能に（既定は非表示）。`lib/app_config.py` を新設し、`app.py` はフラグが true の
+  ときだけ「テーマ設定」ページを `st.navigation` に登録する。
+  [詳細](docs/history/20260709-0255-issue20260709-radius-pref-configtab-plan.md) /
+  [結果](docs/history/20260709-0255-issue20260709-radius-pref-configtab-result.md)
+
 - refactor: 取得件数サマリを「取得結果: {行数}件（店舗数: {店舗数}）」から
   「取得店舗数: {店舗数}件」のみの表示に簡素化（0件時の文言も同様に変更）。
   [詳細](docs/history/20260709-0153-fetch-count-stores-only-plan.md) /

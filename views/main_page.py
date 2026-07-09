@@ -240,29 +240,35 @@ def render(companies: list[str]) -> None:
                 use_container_width=True,
             )
 
-    # --- 表示行（取得後のみ）: 小売店 + 表示半径 ---
-    d1, d2 = st.columns([2, 1])
-    with d1:
-        store = st.selectbox(
-            "小売店名称", stores_for_company(df, loaded_company),
-            index=None, placeholder="店舗を選択してください",
+    # --- 表示行（取得後のみ）: 都道府県 + 小売店 ---
+    # 絞り込み順は 企業 → 取得半径 →（データ取得）→ 都道府県 → 小売店名称。
+    # 都道府県は単一選択・任意で、未選択なら企業内の全店舗を候補にする。
+    pref_col, store_col = st.columns([1, 2])
+    with pref_col:
+        pref = st.selectbox(
+            "都道府県", prefectures_for_company(df, loaded_company),
+            index=None, placeholder="都道府県で絞り込み（任意）",
         )
-    with d2:
-        # 表示半径は取得半径以下に制限（取得範囲外を表示しようとする事故を防ぐ）。
-        display_radius = st.number_input(
-            "表示半径(km)", min_value=0.1, max_value=loaded_fetch_radius,
-            value=loaded_fetch_radius, step=0.1,
+    with store_col:
+        store_opts = (
+            stores_for_company_prefectures(df, loaded_company, [pref])
+            if pref
+            else stores_for_company(df, loaded_company)
+        )
+        store = st.selectbox(
+            "小売店名称", store_opts,
+            index=None, placeholder="店舗を選択してください",
         )
 
     st.divider()
 
     # --- 地図＋施設リスト ---
-    # 表示は display_radius（取得済みデータをさらに絞り込む）で行う。
+    # 表示半径は廃止し、取得半径（loaded_fetch_radius）をそのまま表示に用いる。
     if store is None:
         st.info("小売店名称を選択してください")
     else:
         srow = df[df["店舗名称"] == store].iloc[0]
-        fac = filter_facilities(df, store, display_radius)
+        fac = filter_facilities(df, store, loaded_fetch_radius)
 
         # マップを誤って操作した場合に初期表示へ戻すリセット（紫帯の上に配置）。
         # st_folium の key を変えると再マウントされ、build_map の初期位置/ズームに戻る。
@@ -270,7 +276,7 @@ def render(companies: list[str]) -> None:
             st.session_state["map_nonce"] = st.session_state.get("map_nonce", 0) + 1
         nonce = st.session_state.get("map_nonce", 0)
 
-        st.markdown(_header_html(store, display_radius), unsafe_allow_html=True)
+        st.markdown(_header_html(store, loaded_fetch_radius), unsafe_allow_html=True)
         n = len(fac)
         if n == 0:
             st.warning("該当する推進園がありません")
@@ -278,10 +284,10 @@ def render(companies: list[str]) -> None:
         col_map, col_list = st.columns([2, 1])
         with col_map:
             st_folium(
-                build_map(srow, fac, display_radius),
+                build_map(srow, fac, loaded_fetch_radius),
                 width=700,
                 height=560,
-                key=f"map_{store}_{display_radius}_{nonce}",
+                key=f"map_{store}_{loaded_fetch_radius}_{nonce}",
             )
         with col_list:
             st.markdown(_facility_list_html(fac), unsafe_allow_html=True)
