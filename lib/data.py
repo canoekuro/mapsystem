@@ -219,7 +219,7 @@ def zoom_for_radius(
     radius_km: float,
     lat: float = 35.0,
     viewport_px: int = 600,
-    fraction: float = 0.8,
+    fraction: float = 0.95,
     max_zoom: int = 19,
 ) -> int:
     """
@@ -231,6 +231,13 @@ def zoom_for_radius(
 
         mpp(z) = 156543.03392 * cos(lat) / 2**z   (meters per pixel)
         want   diameter_m / mpp(z) <= fraction * viewport_px
+
+    *fraction* is the share of the viewport the circle is allowed to fill; using
+    ``floor`` above keeps the actual share in ``(fraction/2, fraction]`` so the
+    circle always fits.  It is set to 0.95 (rather than a lower value) so small
+    radii such as 1 km and 2 km zoom in one extra step while still leaving a
+    small margin; larger radii like 3 km stay put because bumping them would push
+    the circle off-screen.
 
     Clamped to ``[0, max_zoom]``.  *max_zoom* is the selected basemap's maximum
     zoom (e.g. GSI styles cap below OSM's 19), so tiles are never requested at a

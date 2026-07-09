@@ -4,6 +4,14 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+### 2026-07-09
+
+- fix: 半径円を地図に収める `zoom_for_radius` の目標占有率 `fraction` を 0.8 から 0.95 に
+  引き上げ、小さい半径の縮尺を一段アップ。半径 1km・2km は対話地図でこれまでより一段
+  ズームインして表示される（例: 緯度35度で 1km が z14→z15、2km が z13→z14）。3km 以上は
+  従来どおり据え置き。`floor` 選択は維持しているため円の占有率は最大でも 95% に収まり、
+  はみ出さない保証はそのまま。対話地図(folium)・ダウンロードPNG(static_map) の双方に反映。
+
 ### 2026-07-07
 
 - feat: 地図の背景（ベースマップ）を「テーマ設定」ページから選択可能に。**OpenStreetMap**（標準/
