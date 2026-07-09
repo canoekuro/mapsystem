@@ -37,7 +37,7 @@ def _legend_html() -> str:
         "background:rgba(255,255,255,0.92);padding:8px 10px;border-radius:6px;"
         'box-shadow:0 1px 4px rgba(0,0,0,0.3);border:1px solid #E5E7EB;">'
         '<div style="font-size:12px;font-weight:bold;color:#111827;'
-        'margin-bottom:4px;">推進園区分</div>'
+        'margin-bottom:4px;">区分</div>'
         f"{rows}</div>"
     )
 

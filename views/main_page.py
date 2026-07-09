@@ -1,5 +1,5 @@
 """
-単一ページ画面: 企業/小売店/半径の選択、企業一括ダウンロード、地図＋施設リスト、出典フッタ。
+単一ページ画面: 企業/小売店/半径の選択、データダウンロード、地図＋施設リスト、出典フッタ。
 
 Public API
 ----------
@@ -174,26 +174,12 @@ def render(companies: list[str]) -> None:
             "「データ取得」を押すと再取得します。"
         )
 
-    # --- 表示行（取得後のみ）: 小売店 + 表示半径 ---
-    d1, d2 = st.columns([2, 1])
-    with d1:
-        store = st.selectbox(
-            "小売店名称", stores_for_company(df, loaded_company),
-            index=None, placeholder="店舗を選択してください",
-        )
-    with d2:
-        # 表示半径は取得半径以下に制限（取得範囲外を表示しようとする事故を防ぐ）。
-        display_radius = st.number_input(
-            "表示半径(km)", min_value=0.1, max_value=loaded_fetch_radius,
-            value=loaded_fetch_radius, step=0.1,
-        )
-
-    # --- 企業一括ダウンロード（expander） ---
+    # --- データダウンロード（expander）: 小売店選択より上に配置 ---
     # 取得済みDF全体（= 取得半径以内）を対象に、取得半径で出力する。
     company = loaded_company
     radius = loaded_fetch_radius
-    with st.expander("企業一括ダウンロード", expanded=False):
-        # 表示順: データダウンロード → 都道府県で絞り込み → 画像をダウンロード。
+    with st.expander("データダウンロード", expanded=False):
+        # 表示順: ローデータダウンロード → 都道府県で絞り込み → 画像をダウンロード。
         # データ/画像は都道府県の選択値を使うため、コンテナで表示位置を固定しつつ
         # 先に都道府県を読み取る。
         data_box = st.container()
@@ -223,7 +209,7 @@ def render(companies: list[str]) -> None:
             else f"{company}_{radius}km.zip"
         )
 
-        # データダウンロード（単一CSV cp932・直接生成、都道府県選択時は絞込）
+        # ローデータダウンロード（単一CSV cp932・直接生成、都道府県選択時は絞込）
         with data_box:
             _csv = (
                 filter_company(df, company, radius, prefectures=prefs if prefs else None)
@@ -231,7 +217,7 @@ def render(companies: list[str]) -> None:
                 .encode("cp932", errors="replace")
             )
             st.download_button(
-                "データダウンロード",
+                "ローデータダウンロード",
                 data=_csv,
                 file_name=csv_filename,
                 mime="text/csv",
@@ -254,6 +240,20 @@ def render(companies: list[str]) -> None:
                 disabled=img_disabled,
                 use_container_width=True,
             )
+
+    # --- 表示行（取得後のみ）: 小売店 + 表示半径 ---
+    d1, d2 = st.columns([2, 1])
+    with d1:
+        store = st.selectbox(
+            "小売店名称", stores_for_company(df, loaded_company),
+            index=None, placeholder="店舗を選択してください",
+        )
+    with d2:
+        # 表示半径は取得半径以下に制限（取得範囲外を表示しようとする事故を防ぐ）。
+        display_radius = st.number_input(
+            "表示半径(km)", min_value=0.1, max_value=loaded_fetch_radius,
+            value=loaded_fetch_radius, step=0.1,
+        )
 
     st.divider()
 
