@@ -6,6 +6,11 @@ All notable changes to this project are documented in this file.
 
 ### 2026-07-09
 
+- refactor: 取得件数サマリを「取得結果: {行数}件（店舗数: {店舗数}）」から
+  「取得店舗数: {店舗数}件」のみの表示に簡素化（0件時の文言も同様に変更）。
+  [詳細](docs/history/20260709-0153-fetch-count-stores-only-plan.md) /
+  [結果](docs/history/20260709-0153-fetch-count-stores-only-result.md)
+
 - refactor: 単一ページ画面のダウンロードUIを整理。「企業一括ダウンロード」expander を
   「データダウンロード」に、その中の「データダウンロード」ボタンを「ローデータダウンロード」に
   改称。あわせて expander を小売店名称・表示半径の選択より上へ移動し、取得結果 → データ
