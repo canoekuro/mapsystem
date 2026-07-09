@@ -7,16 +7,16 @@
 # 注: TOML キーに日本語（非ASCII）を使うため、facility_colors の左辺は必ず "..." で囲むこと。
 
 [theme]
-facility_fallback   = "#6B7280"   # 推進園区分が想定外/未設定のときの色（灰）
+facility_fallback   = "#6B7280"   # 区分が想定外/未設定のときの色（灰）
 circle_color        = "#7C3AED"   # 半径円の線色
 circle_fill_opacity = 0.08        # 半径円の塗り透明度（0.0–1.0）
-band_color          = "#7C3AED"   # 見出し帯・施設リストヘッダーの背景色
+band_color          = "#00BAC9"   # 見出し帯・施設リストヘッダーの背景色
 store_marker_color  = "#111827"   # 中心の店舗マーカー色
 
 [theme.facility_colors]           # 推進園区分 -> 色（定義順は凡例の表示順）
-"認可保育所"   = "#2A78D6"        # 青
-"認定こども園" = "#EB6834"        # 橙
-"幼稚園"       = "#4A3AA7"        # 紫
+"認可保育所"   = "#7030A0"
+"認定こども園" = "#F5C518"
+"幼稚園"       = "#2EAA6E"
 
 # 地図の背景（ベースマップ）。テーマ設定ページで変更できる。
 # 選択肢の id は lib/basemaps.py の BASEMAPS を参照:
@@ -24,7 +24,8 @@ store_marker_color  = "#111827"   # 中心の店舗マーカー色
 #   国土地理院: gsi_std / gsi_pale / gsi_photo / gsi_blank
 #   CARTO(OSMベース): carto_positron / carto_voyager / carto_dark
 [map]
-basemap = "osm_standard"
+basemap = "osm_hot"
+
 # 対話地図（画面表示）のサイズ（px）。テーマ設定ページで変更できる。
 map_width  = 700
 map_height = 560
