@@ -24,12 +24,17 @@ store_marker_color  = "#111827"   # 中心の店舗マーカー色
 #   国土地理院: gsi_std / gsi_pale / gsi_photo / gsi_blank
 #   CARTO(OSMベース): carto_positron / carto_voyager / carto_dark
 [map]
-basemap = "osm_hot"
+basemap = "gsi_pale"
 
 # 対話地図（画面表示）のサイズ（px）。テーマ設定ページで変更できる。
 map_width  = 700
 map_height = 560
 
-# 対話地図の情報粒度を固定するズーム（0=固定しない、1–19=その粒度で固定）。
+# 対話地図の情報粒度を固定するズーム（0=固定しない、1–14=その粒度で固定）。
 # テーマ設定ページで変更できる。ダウンロードPNGには影響しない。
 map_detail_zoom = 0
+
+# 推進園マーカー（番号付きの円）・店舗マーカー（カート）の相対サイズ（％、100=既定）。
+# テーマ設定ページで変更でき、対話地図とダウンロードPNGの両方に反映される。
+facility_marker_size = 100
+store_marker_size    = 100

@@ -16,11 +16,20 @@ from lib.colors import (
     circle_fill_opacity,
     facility_color,
     facility_colors,
+    facility_marker_size,
     map_detail_zoom,
     map_height,
     map_width,
     store_marker_color,
+    store_marker_size,
 )
+
+# マーカーの基準サイズ（px）。テーマの相対サイズ（％）をこの値へ掛けて実サイズを得る。
+# 100％ でおおむね従来の見た目（BeautifyIcon 既定）を保つ。
+_MARKER_BASE_PX = 30
+# 推進園マーカーの番号／店舗マーカーのカート字形の基準フォント（px、100％時）。
+_FACILITY_NUMBER_BASE_PX = 11
+_STORE_GLYPH_BASE_PX = 14
 from lib.data import zoom_for_radius
 
 
@@ -110,6 +119,10 @@ def build_map(store_row, facilities_df, radius_km: float) -> folium.Map:
 
     # --- 3. Store marker (SPEC §6.1.2, テーマ調整可) ---
     # 任意の hex 色を指定できるよう folium.Icon（名前付き色のみ）ではなく BeautifyIcon を使う。
+    # サイズはテーマの相対サイズ（％）で調整する（100％＝既定）。
+    store_scale = store_marker_size()
+    store_px = round(_MARKER_BASE_PX * store_scale / 100)
+    store_glyph_px = round(_STORE_GLYPH_BASE_PX * store_scale / 100)
     folium.Marker(
         location=[lat, lon],
         icon=BeautifyIcon(
@@ -118,11 +131,17 @@ def build_map(store_row, facilities_df, radius_km: float) -> folium.Map:
             border_color=store_marker_color(),
             background_color=store_marker_color(),
             text_color="#FFFFFF",
+            icon_size=[store_px, store_px],
+            icon_anchor=[store_px // 2, store_px],
+            inner_icon_style=f"font-size:{store_glyph_px}px;line-height:{store_px}px;",
         ),
         tooltip=store_name,
     ).add_to(m)
 
-    # --- 4. Facility markers (SPEC §6.1.2) ---
+    # --- 4. Facility markers (SPEC §6.1.2, サイズはテーマ調整可) ---
+    fac_scale = facility_marker_size()
+    fac_px = round(_MARKER_BASE_PX * fac_scale / 100)
+    fac_number_px = round(_FACILITY_NUMBER_BASE_PX * fac_scale / 100)
     for _, row in facilities_df.iterrows():
         bg_color = facility_color(row["推進園区分"])
         number = int(row["連番"])
@@ -135,6 +154,9 @@ def build_map(store_row, facilities_df, radius_km: float) -> folium.Map:
             border_color=bg_color,
             background_color=bg_color,
             text_color="#FFFFFF",
+            icon_size=[fac_px, fac_px],
+            icon_anchor=[fac_px // 2, fac_px // 2],
+            inner_icon_style=f"font-size:{fac_number_px}px;line-height:{fac_px}px;",
         )
         folium.Marker(
             location=[row["推進園lat"], row["推進園lon"]],
