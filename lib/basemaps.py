@@ -98,7 +98,7 @@ BASEMAPS: dict[str, dict] = {
     },
 }
 
-DEFAULT_BASEMAP_ID = "osm_standard"
+DEFAULT_BASEMAP_ID = "gsi_pale"
 
 
 def get_basemap(basemap_id: str) -> dict:

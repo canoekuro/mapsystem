@@ -122,8 +122,8 @@ def render(companies: list[str]) -> None:
         )
     with g2:
         fetch_radius = st.number_input(
-            "取得半径(km)", min_value=0.1, max_value=50.0,
-            value=None, step=0.1, placeholder="半径を入力",
+            "取得半径(km)", min_value=1, max_value=None,
+            value=None, step=1, format="%d", placeholder="半径を入力",
         )
     with g3:
         # ラベル高さ分のスペーサで selectbox/number_input と縦位置を揃える。

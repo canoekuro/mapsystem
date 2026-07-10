@@ -38,6 +38,8 @@ _BASEMAP_KEY = "cfg_basemap"
 _MAP_WIDTH_KEY = "cfg_map_width"
 _MAP_HEIGHT_KEY = "cfg_map_height"
 _MAP_DETAIL_ZOOM_KEY = "cfg_map_detail_zoom"
+_FACILITY_MARKER_SIZE_KEY = "cfg_facility_marker_size"
+_STORE_MARKER_SIZE_KEY = "cfg_store_marker_size"
 
 
 def _init_state() -> None:
@@ -52,6 +54,8 @@ def _init_state() -> None:
     st.session_state.setdefault(_MAP_WIDTH_KEY, int(current["map_width"]))
     st.session_state.setdefault(_MAP_HEIGHT_KEY, int(current["map_height"]))
     st.session_state.setdefault(_MAP_DETAIL_ZOOM_KEY, int(current["map_detail_zoom"]))
+    st.session_state.setdefault(_FACILITY_MARKER_SIZE_KEY, int(current["facility_marker_size"]))
+    st.session_state.setdefault(_STORE_MARKER_SIZE_KEY, int(current["store_marker_size"]))
 
 
 def _reset_to_default() -> None:
@@ -70,6 +74,8 @@ def _reset_to_default() -> None:
     st.session_state[_MAP_WIDTH_KEY] = int(d["map_width"])
     st.session_state[_MAP_HEIGHT_KEY] = int(d["map_height"])
     st.session_state[_MAP_DETAIL_ZOOM_KEY] = int(d["map_detail_zoom"])
+    st.session_state[_FACILITY_MARKER_SIZE_KEY] = int(d["facility_marker_size"])
+    st.session_state[_STORE_MARKER_SIZE_KEY] = int(d["store_marker_size"])
 
 
 def _collect_values(categories: list[str]) -> dict:
@@ -83,6 +89,8 @@ def _collect_values(categories: list[str]) -> dict:
     values["map_width"] = int(st.session_state[_MAP_WIDTH_KEY])
     values["map_height"] = int(st.session_state[_MAP_HEIGHT_KEY])
     values["map_detail_zoom"] = int(st.session_state[_MAP_DETAIL_ZOOM_KEY])
+    values["facility_marker_size"] = int(st.session_state[_FACILITY_MARKER_SIZE_KEY])
+    values["store_marker_size"] = int(st.session_state[_STORE_MARKER_SIZE_KEY])
     return values
 
 
@@ -117,6 +125,11 @@ def _preview_html(values: dict) -> str:
     opacity = values["circle_fill_opacity"]
     store = values["store_marker_color"]
     fac = values["facility_colors"]
+    fac_scale = values["facility_marker_size"] / 100
+    store_scale = values["store_marker_size"] / 100
+    badge_px = round(24 * fac_scale)
+    badge_font_px = round(12 * fac_scale)
+    store_dot_px = round(20 * store_scale)
 
     band_bar = (
         f'<div style="background:{band};color:#fff;height:40px;display:flex;'
@@ -138,9 +151,9 @@ def _preview_html(values: dict) -> str:
     )
     badges = "".join(
         f'<div style="display:flex;align-items:center;margin:4px 0;">'
-        f'<span style="width:24px;height:24px;border-radius:50%;background:{col};'
+        f'<span style="width:{badge_px}px;height:{badge_px}px;border-radius:50%;background:{col};'
         "color:#fff;display:flex;align-items:center;justify-content:center;"
-        f'font-size:12px;font-weight:bold;">{i}</span>'
+        f'font-size:{badge_font_px}px;font-weight:bold;flex-shrink:0;">{i}</span>'
         f'<span style="margin-left:8px;font-size:13px;color:#111827;">{cat} サンプル</span>'
         "</div>"
         for i, (cat, col) in enumerate(fac.items(), start=1)
@@ -152,7 +165,7 @@ def _preview_html(values: dict) -> str:
         f"border:3px dashed {circle};"
         f'background:rgba({r},{g},{b},{opacity});display:flex;align-items:center;'
         "justify-content:center;\">"
-        f'<span style="width:20px;height:20px;border-radius:50%;background:{store};'
+        f'<span style="width:{store_dot_px}px;height:{store_dot_px}px;border-radius:50%;background:{store};'
         'border:3px solid #fff;box-shadow:0 0 0 1px #999;"></span></div>'
     )
     return (
@@ -224,8 +237,25 @@ def render() -> None:
         "対話地図のみ。ダウンロードPNGには影響しません。"
     )
     st.number_input(
-        "詳細度ズーム", min_value=0, max_value=19, step=1, key=_MAP_DETAIL_ZOOM_KEY
+        "詳細度ズーム", min_value=0, max_value=14, step=1, key=_MAP_DETAIL_ZOOM_KEY
     )
+
+    st.subheader("マーカーサイズ")
+    st.caption(
+        "推進園マーカー（番号付きの円）と店舗マーカー（カート）の大きさ（％、100＝既定）。"
+        "対話地図・ダウンロードPNGの両方に反映されます。"
+    )
+    m1, m2 = st.columns(2)
+    with m1:
+        st.number_input(
+            "推進園マーカー(%)", min_value=50, max_value=200, step=10,
+            key=_FACILITY_MARKER_SIZE_KEY,
+        )
+    with m2:
+        st.number_input(
+            "店舗マーカー(%)", min_value=50, max_value=200, step=10,
+            key=_STORE_MARKER_SIZE_KEY,
+        )
 
     values = _collect_values(categories)
 

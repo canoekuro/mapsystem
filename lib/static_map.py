@@ -32,8 +32,10 @@ from lib.colors import (
     circle_fill_opacity,
     facility_color_rgb,
     facility_colors,
+    facility_marker_size,
     hex_to_rgb,
     store_marker_color_rgb,
+    store_marker_size,
 )
 from lib.data import zoom_for_radius
 
@@ -224,12 +226,13 @@ def render_static_map(store_row, facilities_df, radius_km: float, size: int = 65
 
     draw = ImageDraw.Draw(base)
 
-    # --- Facility markers (colored circle + white number) ---
-    badge_font = _font(12)
+    # --- Facility markers (colored circle + white number; サイズはテーマ調整可) ---
+    fac_scale = facility_marker_size()
+    r = max(3, round(11 * fac_scale / 100))
+    badge_font = _font(max(6, round(12 * fac_scale / 100)))
     for _, row in facilities_df.iterrows():
         px, py = to_px(float(row["推進園lat"]), float(row["推進園lon"]))
         color = facility_color_rgb(row["推進園区分"])
-        r = 11
         draw.ellipse(
             [px - r, py - r, px + r, py + r],
             fill=(*color, 255),
@@ -238,17 +241,19 @@ def render_static_map(store_row, facilities_df, radius_km: float, size: int = 65
         )
         draw.text((px, py), str(int(row["連番"])), font=badge_font, fill=(*_WHITE, 255), anchor="mm")
 
-    # --- Store marker (distinct marker at center; テーマ調整可) ---
+    # --- Store marker (distinct marker at center; サイズ・色ともテーマ調整可) ---
     store_rgb = store_marker_color_rgb()
+    store_scale = store_marker_size()
     sx, sy = to_px(clat, clon)
-    sr = 12
+    sr = max(4, round(12 * store_scale / 100))
+    inner_r = max(1, round(3 * store_scale / 100))
     draw.ellipse(
         [sx - sr, sy - sr, sx + sr, sy + sr],
         fill=(*store_rgb, 255),
         outline=(*_WHITE, 255),
         width=3,
     )
-    draw.ellipse([sx - 3, sy - 3, sx + 3, sy + 3], fill=(*_WHITE, 255))
+    draw.ellipse([sx - inner_r, sy - inner_r, sx + inner_r, sy + inner_r], fill=(*_WHITE, 255))
 
     # --- Legend (推進園区分の色分け凡例) ---
     _draw_legend(draw, size)
