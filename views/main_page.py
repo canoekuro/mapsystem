@@ -27,6 +27,10 @@ from lib.zip_builder import build_png_zip
 
 logger = logging.getLogger(__name__)
 
+# ページ遷移（st.navigation）を跨いで保持する入力ウィジェットの session_state キー。
+# 企業名称・取得半径・都道府県（表示行）・小売店名称・都道府県（一括DL）。
+_INPUT_KEYS = ("mp_company", "mp_fetch_radius", "mp_pref", "mp_store", "mp_prefs")
+
 
 # df is excluded from the cache key (hash_funcs returns None): it is uniquely
 # determined by the already-fetched (company, radius), which are part of the key.
@@ -114,16 +118,29 @@ def render(companies: list[str]) -> None:
     The filtered DataFrame is fetched on demand when データ取得 is pressed and
     kept in st.session_state.
     """
+    # ページ遷移（st.navigation）で入力ウィジェットの状態が破棄されるのを防ぐ。
+    # 各 widget キーを自身へ再代入し、他ページ表示中に purge されないようにする
+    # （企業名称・取得半径・都道府県・小売店名称が戻ったときに復元される）。
+    for _k in _INPUT_KEYS:
+        if _k in st.session_state:
+            st.session_state[_k] = st.session_state[_k]
+
+    # 保持した選択肢が現在の候補に無い場合はクリアする（options 変化時の例外回避）。
+    if st.session_state.get("mp_company") not in companies:
+        st.session_state.pop("mp_company", None)
+
     # --- 取得行（常時表示）: 企業 + 取得半径 + データ取得ボタン ---
     g1, g2, g3 = st.columns([2, 1, 1])
     with g1:
         company = st.selectbox(
-            "企業名称", companies, index=None, placeholder="企業を選択してください"
+            "企業名称", companies, index=None, placeholder="企業を選択してください",
+            key="mp_company",
         )
     with g2:
         fetch_radius = st.number_input(
             "取得半径(km)", min_value=1, max_value=None,
             value=None, step=1, format="%d", placeholder="半径を入力",
+            key="mp_fetch_radius",
         )
     with g3:
         # ラベル高さ分のスペーサで selectbox/number_input と縦位置を揃える。
@@ -187,9 +204,14 @@ def render(companies: list[str]) -> None:
 
         with pref_box:
             pref_opts = prefectures_for_company(df, company)
+            # 保持値のうち現在の候補に無いものを除外（options 変化時の例外回避）。
+            if "mp_prefs" in st.session_state:
+                st.session_state["mp_prefs"] = [
+                    p for p in st.session_state["mp_prefs"] if p in pref_opts
+                ]
             prefs = st.multiselect(
                 "都道府県で絞り込み", pref_opts, default=[],
-                placeholder="都道府県を選択",
+                placeholder="都道府県を選択", key="mp_prefs",
             )
             if prefs:
                 count = store_count_for_company_prefectures(df, company, prefs)
@@ -245,9 +267,14 @@ def render(companies: list[str]) -> None:
     # 都道府県は単一選択・任意で、未選択なら企業内の全店舗を候補にする。
     pref_col, store_col = st.columns([1, 2])
     with pref_col:
+        pref_opts_disp = prefectures_for_company(df, loaded_company)
+        # 保持値が現在の候補に無ければクリア（options 変化時の例外回避）。
+        if st.session_state.get("mp_pref") not in pref_opts_disp:
+            st.session_state.pop("mp_pref", None)
         pref = st.selectbox(
-            "都道府県", prefectures_for_company(df, loaded_company),
+            "都道府県", pref_opts_disp,
             index=None, placeholder="都道府県で絞り込み（任意）",
+            key="mp_pref",
         )
     with store_col:
         store_opts = (
@@ -255,9 +282,13 @@ def render(companies: list[str]) -> None:
             if pref
             else stores_for_company(df, loaded_company)
         )
+        # 都道府県変更等で保持した店舗が候補外になった場合はクリア。
+        if st.session_state.get("mp_store") not in store_opts:
+            st.session_state.pop("mp_store", None)
         store = st.selectbox(
             "小売店名称", store_opts,
             index=None, placeholder="店舗を選択してください",
+            key="mp_store",
         )
 
     st.divider()

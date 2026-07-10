@@ -33,7 +33,7 @@ from lib.colors import (
     circle_fill_opacity,
     facility_color_rgb,
     facility_colors,
-    facility_marker_size,
+    facility_marker_size_for_radius,
     hex_to_rgb,
     store_marker_size,
 )
@@ -255,8 +255,8 @@ def render_static_map(store_row, facilities_df, radius_km: float, size: int = 65
 
     draw = ImageDraw.Draw(base)
 
-    # --- Facility markers (colored circle + white number; サイズはテーマ調整可) ---
-    fac_scale = facility_marker_size()
+    # --- Facility markers (colored circle + white number; サイズは地図半径ごとにテーマ調整可) ---
+    fac_scale = facility_marker_size_for_radius(radius_km)
     r = max(3, round(11 * fac_scale / 100))
     badge_font = _font(max(6, round(12 * fac_scale / 100)))
     for _, row in facilities_df.iterrows():

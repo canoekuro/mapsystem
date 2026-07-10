@@ -14,9 +14,9 @@ Public API
 facility_colors() / facility_color(cat) / facility_color_rgb(cat)
 circle_color() / circle_color_rgb() / circle_fill_opacity()
 band_color() / band_color_rgb()
-store_marker_color() / store_marker_color_rgb()
 basemap_id()
 map_width() / map_height() / map_detail_zoom()
+facility_marker_sizes() / facility_marker_size_for_radius(radius_km) / store_marker_size()
 hex_to_rgb(hex)
 get_theme() / reload_theme() / apply_overrides(values)
 save_theme(values) / theme_toml_text(values) / default_theme()
@@ -40,7 +40,6 @@ _DEFAULTS: dict = {
     "circle_color": "#7C3AED",
     "circle_fill_opacity": 0.08,
     "band_color": "#7C3AED",
-    "store_marker_color": "#111827",
     # 地図の背景（ベースマップ）。id は lib/basemaps.BASEMAPS を参照。
     "basemap": basemaps.DEFAULT_BASEMAP_ID,
     # 対話地図（画面表示）のサイズ（px）。
@@ -50,15 +49,22 @@ _DEFAULTS: dict = {
     # 0 = 固定しない（ズームに追従）だが粒度は 14 で頭打ち（15 以上にはしない）。
     # 1–14 = そのズーム相当の粒度で固定。
     "map_detail_zoom": 0,
-    # 推進園マーカー（番号付きの円）・店舗マーカー（カート）の相対サイズ（％）。
+    # 推進園マーカー（番号付きの円）の相対サイズ（％）を地図半径ごとに段階指定する。
+    # 要素は半径バケット [≤1, ≤2, ≤3, ≤4, ≤5, >5] km に対応（_FACILITY_SIZE_RADII 参照）。
     # 100 = 既定サイズ。対話地図・ダウンロードPNGの両方に反映する。
-    "facility_marker_size": 100,
+    "facility_marker_sizes": [150, 120, 100, 90, 80, 50],
+    # 店舗マーカー（画像アイコン）の相対サイズ（％、100=既定）。両描画に反映。
     "store_marker_size": 100,
 }
 
 # 情報粒度固定ズームの許容範囲。0 は「固定しない」の意。
 _DETAIL_ZOOM_MIN = 0
 _DETAIL_ZOOM_MAX = 14
+
+# 推進園マーカーサイズの半径しきい値（km）。radius がその値以下なら対応要素を採用。
+# 末尾（>5km）は facility_marker_sizes の最終要素。要素数はこの長さ + 1（=6）。
+_FACILITY_SIZE_RADII = (1.0, 2.0, 3.0, 4.0, 5.0)
+_FACILITY_SIZE_COUNT = len(_FACILITY_SIZE_RADII) + 1
 
 # 対話地図サイズ（px）の許容範囲。設定ページの入力・TOML 値の両方をこの範囲にクランプする。
 _MAP_SIZE_MIN = 200
@@ -74,7 +80,6 @@ _SCALAR_KEYS = (
     "circle_color",
     "circle_fill_opacity",
     "band_color",
-    "store_marker_color",
 )
 
 # defaults <- file <- overrides のマージ結果。get_theme() でキャッシュし save/apply で無効化。
@@ -102,7 +107,7 @@ def _load_from_file() -> dict:
         "map_width",
         "map_height",
         "map_detail_zoom",
-        "facility_marker_size",
+        "facility_marker_sizes",
         "store_marker_size",
     ):
         if key in map_section:
@@ -130,7 +135,16 @@ def _merge(base: dict, extra: dict) -> None:
         elif key == "map_detail_zoom":
             if isinstance(value, (int, float)) and not isinstance(value, bool):
                 base[key] = max(_DETAIL_ZOOM_MIN, min(_DETAIL_ZOOM_MAX, int(value)))
-        elif key in ("facility_marker_size", "store_marker_size"):
+        elif key == "facility_marker_sizes":
+            if isinstance(value, (list, tuple)):
+                cleaned = [
+                    max(_MARKER_SIZE_MIN, min(_MARKER_SIZE_MAX, int(v)))
+                    for v in value
+                    if isinstance(v, (int, float)) and not isinstance(v, bool)
+                ]
+                if len(cleaned) == _FACILITY_SIZE_COUNT:
+                    base[key] = cleaned
+        elif key == "store_marker_size":
             if isinstance(value, (int, float)) and not isinstance(value, bool):
                 base[key] = max(_MARKER_SIZE_MIN, min(_MARKER_SIZE_MAX, int(value)))
         elif key in _SCALAR_KEYS:
@@ -209,16 +223,6 @@ def band_color_rgb() -> tuple[int, int, int]:
     return hex_to_rgb(band_color())
 
 
-def store_marker_color() -> str:
-    """中心の店舗マーカー色（16進）。"""
-    return get_theme()["store_marker_color"]
-
-
-def store_marker_color_rgb() -> tuple[int, int, int]:
-    """中心の店舗マーカー色（RGB）。"""
-    return hex_to_rgb(store_marker_color())
-
-
 def basemap_id() -> str:
     """選択中の地図ベースマップ id（未知値は既定へフォールバック）。"""
     bid = get_theme().get("basemap", basemaps.DEFAULT_BASEMAP_ID)
@@ -240,13 +244,26 @@ def map_detail_zoom() -> int:
     return int(get_theme()["map_detail_zoom"])
 
 
-def facility_marker_size() -> int:
-    """推進園マーカー（番号付きの円）の相対サイズ（％、100=既定）。"""
-    return int(get_theme()["facility_marker_size"])
+def facility_marker_sizes() -> list[int]:
+    """推進園マーカーの相対サイズ（％）の半径バケット別リスト（[≤1,≤2,≤3,≤4,≤5,>5]km）。"""
+    return [int(v) for v in get_theme()["facility_marker_sizes"]]
+
+
+def facility_marker_size_for_radius(radius_km: float) -> int:
+    """地図半径に対応する推進園マーカーの相対サイズ（％）を返す。
+
+    半径がしきい値（``_FACILITY_SIZE_RADII``）以下なら対応要素、いずれも超える場合は
+    末尾要素（>5km）を返す。
+    """
+    sizes = facility_marker_sizes()
+    for i, threshold in enumerate(_FACILITY_SIZE_RADII):
+        if radius_km <= threshold:
+            return sizes[i]
+    return sizes[_FACILITY_SIZE_COUNT - 1]
 
 
 def store_marker_size() -> int:
-    """店舗マーカー（カート）の相対サイズ（％、100=既定）。"""
+    """店舗マーカー（画像アイコン）の相対サイズ（％、100=既定）。"""
     return int(get_theme()["store_marker_size"])
 
 
@@ -265,7 +282,6 @@ def theme_toml_text(values: dict) -> str:
         f'circle_color        = "{theme["circle_color"]}"',
         f"circle_fill_opacity = {theme['circle_fill_opacity']}",
         f'band_color          = "{theme["band_color"]}"',
-        f'store_marker_color  = "{theme["store_marker_color"]}"',
         "",
         "[theme.facility_colors]",
     ]
@@ -281,9 +297,12 @@ def theme_toml_text(values: dict) -> str:
         f'map_height = {int(theme["map_height"])}',
         "# 対話地図の情報粒度を固定するズーム（0=固定しない・粒度は14で頭打ち、1–14=その粒度で固定）。",
         f'map_detail_zoom = {int(theme["map_detail_zoom"])}',
-        "# 推進園マーカー・店舗マーカーの相対サイズ（％、100=既定）。対話地図・PNG両方に反映。",
-        f'facility_marker_size = {int(theme["facility_marker_size"])}',
-        f'store_marker_size    = {int(theme["store_marker_size"])}',
+        "# 推進園マーカーの相対サイズ（％、100=既定）。地図半径 [≤1,≤2,≤3,≤4,≤5,>5]km ごとに指定。",
+        "# 店舗マーカーは相対サイズ（％）。いずれも対話地図・PNG両方に反映。",
+        "facility_marker_sizes = ["
+        + ", ".join(str(int(v)) for v in theme["facility_marker_sizes"])
+        + "]",
+        f'store_marker_size     = {int(theme["store_marker_size"])}',
     ]
     return "\n".join(lines) + "\n"
 
