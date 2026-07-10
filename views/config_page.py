@@ -37,6 +37,7 @@ def _facility_key(category: str) -> str:
 _BASEMAP_KEY = "cfg_basemap"
 _MAP_WIDTH_KEY = "cfg_map_width"
 _MAP_HEIGHT_KEY = "cfg_map_height"
+_MAP_DETAIL_ZOOM_KEY = "cfg_map_detail_zoom"
 
 
 def _init_state() -> None:
@@ -50,6 +51,7 @@ def _init_state() -> None:
     st.session_state.setdefault(_BASEMAP_KEY, theme.basemap_id())
     st.session_state.setdefault(_MAP_WIDTH_KEY, int(current["map_width"]))
     st.session_state.setdefault(_MAP_HEIGHT_KEY, int(current["map_height"]))
+    st.session_state.setdefault(_MAP_DETAIL_ZOOM_KEY, int(current["map_detail_zoom"]))
 
 
 def _reset_to_default() -> None:
@@ -67,6 +69,7 @@ def _reset_to_default() -> None:
     st.session_state[f"cfg_map_style_{default_provider}"] = basemaps.get_basemap(d["basemap"])["label"]
     st.session_state[_MAP_WIDTH_KEY] = int(d["map_width"])
     st.session_state[_MAP_HEIGHT_KEY] = int(d["map_height"])
+    st.session_state[_MAP_DETAIL_ZOOM_KEY] = int(d["map_detail_zoom"])
 
 
 def _collect_values(categories: list[str]) -> dict:
@@ -79,6 +82,7 @@ def _collect_values(categories: list[str]) -> dict:
     values["basemap"] = st.session_state[_BASEMAP_KEY]
     values["map_width"] = int(st.session_state[_MAP_WIDTH_KEY])
     values["map_height"] = int(st.session_state[_MAP_HEIGHT_KEY])
+    values["map_detail_zoom"] = int(st.session_state[_MAP_DETAIL_ZOOM_KEY])
     return values
 
 
@@ -212,6 +216,16 @@ def render() -> None:
         st.number_input(
             "高さ(px)", min_value=400, max_value=1000, step=20, key=_MAP_HEIGHT_KEY
         )
+
+    st.subheader("情報の粒度（詳細度）")
+    st.caption(
+        "0＝固定しない（ズームに追従）。1以上＝そのズーム相当の詳細度で固定し、"
+        "地図をズームしても表示情報の粒度が変わりません（拡大するとぼやけます）。"
+        "対話地図のみ。ダウンロードPNGには影響しません。"
+    )
+    st.number_input(
+        "詳細度ズーム", min_value=0, max_value=19, step=1, key=_MAP_DETAIL_ZOOM_KEY
+    )
 
     values = _collect_values(categories)
 

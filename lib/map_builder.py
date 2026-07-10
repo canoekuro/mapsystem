@@ -16,6 +16,7 @@ from lib.colors import (
     circle_fill_opacity,
     facility_color,
     facility_colors,
+    map_detail_zoom,
     map_height,
     map_width,
     store_marker_color,
@@ -74,12 +75,25 @@ def build_map(store_row, facilities_df, radius_km: float) -> folium.Map:
     m = folium.Map(
         location=[lat, lon],
         zoom_start=zoom_for_radius(radius_km, lat, viewport_px=m_height, max_zoom=bm["max_zoom"]),
-        tiles=bm["url"],
-        attr=bm["attribution"],
+        tiles=None,
         max_zoom=bm["max_zoom"],
         width=m_width,
         height=m_height,
     )
+    # 情報粒度（詳細度）の固定: detail_zoom > 0 のとき native zoom を固定し、
+    # 地図をズームしてもタイル画像を拡大縮小するだけにして粒度を一定に保つ（SPEC §6.1.2）。
+    # ベースマップが提供するズーム上限を超えないようクランプする。
+    tile_opts: dict = {}
+    detail_zoom = map_detail_zoom()
+    if detail_zoom > 0:
+        fixed = min(detail_zoom, bm["max_zoom"])
+        tile_opts = {"max_native_zoom": fixed, "min_native_zoom": fixed}
+    folium.TileLayer(
+        tiles=bm["url"],
+        attr=bm["attribution"],
+        max_zoom=bm["max_zoom"],
+        **tile_opts,
+    ).add_to(m)
 
     # --- 2. Radius circle (SPEC §6.1.2, テーマ調整可) ---
     circle_hex = circle_color()

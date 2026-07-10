@@ -16,7 +16,7 @@ circle_color() / circle_color_rgb() / circle_fill_opacity()
 band_color() / band_color_rgb()
 store_marker_color() / store_marker_color_rgb()
 basemap_id()
-map_width() / map_height()
+map_width() / map_height() / map_detail_zoom()
 hex_to_rgb(hex)
 get_theme() / reload_theme() / apply_overrides(values)
 save_theme(values) / theme_toml_text(values) / default_theme()
@@ -46,7 +46,14 @@ _DEFAULTS: dict = {
     # 対話地図（画面表示）のサイズ（px）。
     "map_width": 700,
     "map_height": 560,
+    # 対話地図の情報粒度（詳細度）を固定するズームレベル。
+    # 0 = 固定しない（ズームに追従）。1–19 = そのズーム相当の粒度で固定。
+    "map_detail_zoom": 0,
 }
+
+# 情報粒度固定ズームの許容範囲。0 は「固定しない」の意。
+_DETAIL_ZOOM_MIN = 0
+_DETAIL_ZOOM_MAX = 19
 
 # 対話地図サイズ（px）の許容範囲。設定ページの入力・TOML 値の両方をこの範囲にクランプする。
 _MAP_SIZE_MIN = 200
@@ -81,7 +88,7 @@ def _load_from_file() -> dict:
         return {}
     loaded = dict(data.get("theme", {}) or {})
     map_section = data.get("map", {}) or {}
-    for key in ("basemap", "map_width", "map_height"):
+    for key in ("basemap", "map_width", "map_height", "map_detail_zoom"):
         if key in map_section:
             loaded[key] = map_section[key]
     return loaded
@@ -104,6 +111,9 @@ def _merge(base: dict, extra: dict) -> None:
         elif key in ("map_width", "map_height"):
             if isinstance(value, (int, float)) and value > 0:
                 base[key] = max(_MAP_SIZE_MIN, min(_MAP_SIZE_MAX, int(value)))
+        elif key == "map_detail_zoom":
+            if isinstance(value, (int, float)) and not isinstance(value, bool):
+                base[key] = max(_DETAIL_ZOOM_MIN, min(_DETAIL_ZOOM_MAX, int(value)))
         elif key in _SCALAR_KEYS:
             if isinstance(value, str) and value:
                 base[key] = value
@@ -206,6 +216,11 @@ def map_height() -> int:
     return int(get_theme()["map_height"])
 
 
+def map_detail_zoom() -> int:
+    """対話地図の情報粒度を固定するズーム（0=固定しない、1–19=その粒度で固定）。"""
+    return int(get_theme()["map_detail_zoom"])
+
+
 # --- persistence ------------------------------------------------------------
 
 def theme_toml_text(values: dict) -> str:
@@ -235,6 +250,8 @@ def theme_toml_text(values: dict) -> str:
         "# 対話地図（画面表示）のサイズ（px）。",
         f'map_width  = {int(theme["map_width"])}',
         f'map_height = {int(theme["map_height"])}',
+        "# 対話地図の情報粒度を固定するズーム（0=固定しない、1–19=その粒度で固定）。",
+        f'map_detail_zoom = {int(theme["map_detail_zoom"])}',
     ]
     return "\n".join(lines) + "\n"
 
