@@ -17,7 +17,7 @@ from lib.colors import (
     circle_fill_opacity,
     facility_color,
     facility_colors,
-    facility_marker_size,
+    facility_marker_size_for_radius,
     map_detail_zoom,
     map_height,
     map_width,
@@ -137,8 +137,8 @@ def build_map(store_row, facilities_df, radius_km: float) -> folium.Map:
         tooltip=store_name,
     ).add_to(m)
 
-    # --- 4. Facility markers (SPEC §6.1.2, サイズはテーマ調整可) ---
-    fac_scale = facility_marker_size()
+    # --- 4. Facility markers (SPEC §6.1.2, サイズは地図半径ごとにテーマ調整可) ---
+    fac_scale = facility_marker_size_for_radius(radius_km)
     fac_px = round(_MARKER_BASE_PX * fac_scale / 100)
     fac_number_px = round(_FACILITY_NUMBER_BASE_PX * fac_scale / 100)
     for _, row in facilities_df.iterrows():
