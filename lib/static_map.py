@@ -25,6 +25,7 @@ from functools import lru_cache
 import requests
 from PIL import Image, ImageDraw, ImageFont
 
+from lib import icons
 from lib.basemaps import get_basemap
 from lib.colors import (
     basemap_id,
@@ -34,7 +35,6 @@ from lib.colors import (
     facility_colors,
     facility_marker_size,
     hex_to_rgb,
-    store_marker_color_rgb,
     store_marker_size,
 )
 from lib.data import zoom_for_radius
@@ -43,6 +43,10 @@ logger = logging.getLogger(__name__)
 
 TILE_SIZE = 256
 _EARTH_RADIUS_KM = 6371.0
+
+# 情報粒度（タイル取得ズーム）の上限。表示ズームがこれを超えても取得は 14 で頭打ちにし、
+# 14 相当タイルを拡大して用いる（対話地図の max_native_zoom と同挙動、SPEC §6.1.2 追補）。
+_DETAIL_ZOOM_CAP = 14
 
 # タイルURLは選択中のベースマップ（lib.basemaps / テーマ）から決まる。
 # OSM_TILE_URL 環境変数が設定されていれば、egress 制限ワークスペース向けにそれを優先する。
@@ -174,19 +178,38 @@ def render_static_map(store_row, facilities_df, radius_km: float, size: int = 65
     clon = float(store_row["店舗lon"])
     bm = get_basemap(basemap_id())
     tile_url = _TILE_URL_OVERRIDE or bm["url"]
-    zoom = zoom_for_radius(radius_km, clat, viewport_px=size, max_zoom=bm["max_zoom"])
-    n_tiles = 2 ** zoom
 
-    cx, cy = _project(clat, clon, zoom)
-    left = cx - size / 2.0
-    top = cy - size / 2.0
-    right = cx + size / 2.0
-    bottom = cy + size / 2.0
+    # 表示ズーム（半径円が枠内に収まるズーム）と、タイル取得ズーム（情報粒度）を分離する。
+    # 粒度が 15 以上になるときは 14 で頭打ちにし、14 相当タイルを scale 倍に拡大して用いる。
+    # PNG では取得ズームを抑えるだけで枠取り（表示ズーム）は維持する（SPEC §6.1.2 追補）。
+    z_display = zoom_for_radius(radius_km, clat, viewport_px=size, max_zoom=bm["max_zoom"])
+    z_native = min(z_display, _DETAIL_ZOOM_CAP)
+    scale = 2 ** (z_display - z_native)  # 1, 2, 4, ...（14 以下なら 1＝従来通り）
+    n_tiles = 2 ** z_native
 
-    x_min = math.floor(left / TILE_SIZE)
-    x_max = math.floor((right - 1) / TILE_SIZE)
-    y_min = math.floor(top / TILE_SIZE)
-    y_max = math.floor((bottom - 1) / TILE_SIZE)
+    # 表示（z_display）グローバル画素での窓。オーバーレイ（円・マーカー・凡例）に使う。
+    cxd, cyd = _project(clat, clon, z_display)
+    left = cxd - size / 2.0
+    top = cyd - size / 2.0
+
+    # 取得（z_native）グローバル画素での窓。scale で表示窓と厳密対応する（left = scale * left_n）。
+    native_size = size / scale
+    cxn, cyn = _project(clat, clon, z_native)
+    left_n = cxn - native_size / 2.0
+    top_n = cyn - native_size / 2.0
+    right_n = cxn + native_size / 2.0
+    bottom_n = cyn + native_size / 2.0
+
+    # 取得窓を覆う整数の native 画素ボックス（拡大後に表示窓を正確に切り出せるよう 1px 余白）。
+    nx0 = math.floor(left_n) - 1
+    ny0 = math.floor(top_n) - 1
+    nx1 = math.ceil(right_n) + 1
+    ny1 = math.ceil(bottom_n) + 1
+
+    x_min = math.floor(nx0 / TILE_SIZE)
+    x_max = math.floor((nx1 - 1) / TILE_SIZE)
+    y_min = math.floor(ny0 / TILE_SIZE)
+    y_max = math.floor((ny1 - 1) / TILE_SIZE)
 
     mosaic_w = (x_max - x_min + 1) * TILE_SIZE
     mosaic_h = (y_max - y_min + 1) * TILE_SIZE
@@ -197,20 +220,26 @@ def render_static_map(store_row, facilities_df, radius_km: float, size: int = 65
             if ty < 0 or ty >= n_tiles:
                 continue  # above/below the world — leave background
             txw = tx % n_tiles  # wrap longitude
-            tile_bytes = _fetch_tile(zoom, txw, ty, tile_url)
+            tile_bytes = _fetch_tile(z_native, txw, ty, tile_url)
             tile_img = Image.open(io.BytesIO(tile_bytes)).convert("RGB")
             mosaic.paste(
                 tile_img,
                 ((tx - x_min) * TILE_SIZE, (ty - y_min) * TILE_SIZE),
             )
 
-    # Crop the mosaic to the size x size window centered on the store.
-    off_x = int(round(left - x_min * TILE_SIZE))
-    off_y = int(round(top - y_min * TILE_SIZE))
-    base = mosaic.crop((off_x, off_y, off_x + size, off_y + size)).convert("RGBA")
+    # native ボックスを切り出し → scale 倍に拡大 → 表示窓（size×size）を厳密に切り出す。
+    sub = mosaic.crop(
+        (nx0 - x_min * TILE_SIZE, ny0 - y_min * TILE_SIZE,
+         nx1 - x_min * TILE_SIZE, ny1 - y_min * TILE_SIZE)
+    )
+    if scale != 1:
+        sub = sub.resize(((nx1 - nx0) * scale, (ny1 - ny0) * scale))
+    off_x = int(round(left - nx0 * scale))
+    off_y = int(round(top - ny0 * scale))
+    base = sub.crop((off_x, off_y, off_x + size, off_y + size)).convert("RGBA")
 
     def to_px(lat: float, lon: float) -> tuple[float, float]:
-        gx, gy = _project(lat, lon, zoom)
+        gx, gy = _project(lat, lon, z_display)
         return gx - left, gy - top
 
     # --- Radius circle (geodesic polygon, translucent fill; テーマ調整可) ---
@@ -241,19 +270,17 @@ def render_static_map(store_row, facilities_df, radius_km: float, size: int = 65
         )
         draw.text((px, py), str(int(row["連番"])), font=badge_font, fill=(*_WHITE, 255), anchor="mm")
 
-    # --- Store marker (distinct marker at center; サイズ・色ともテーマ調整可) ---
-    store_rgb = store_marker_color_rgb()
-    store_scale = store_marker_size()
+    # --- Store marker (images/icon.png ピン、tip を店舗座標へ合わせる; サイズはテーマ調整可) ---
+    store_w, store_h = icons.store_icon_size(store_marker_size())
+    tip_rx, tip_ry = icons.store_icon_tip()
     sx, sy = to_px(clat, clon)
-    sr = max(4, round(12 * store_scale / 100))
-    inner_r = max(1, round(3 * store_scale / 100))
-    draw.ellipse(
-        [sx - sr, sy - sr, sx + sr, sy + sr],
-        fill=(*store_rgb, 255),
-        outline=(*_WHITE, 255),
-        width=3,
+    with Image.open(icons.icon_path()) as _icon:
+        icon_img = _icon.convert("RGBA").resize((store_w, store_h))
+    base.paste(
+        icon_img,
+        (round(sx - store_w * tip_rx), round(sy - store_h * tip_ry)),
+        icon_img,
     )
-    draw.ellipse([sx - inner_r, sy - inner_r, sx + inner_r, sy + inner_r], fill=(*_WHITE, 255))
 
     # --- Legend (推進園区分の色分け凡例) ---
     _draw_legend(draw, size)

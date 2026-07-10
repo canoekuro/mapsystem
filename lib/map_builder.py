@@ -9,6 +9,7 @@ build_map(store_row, facilities_df, radius_km) -- build a folium.Map for a store
 import folium
 from folium.plugins import BeautifyIcon
 
+from lib import icons
 from lib.basemaps import get_basemap
 from lib.colors import (
     basemap_id,
@@ -20,17 +21,19 @@ from lib.colors import (
     map_detail_zoom,
     map_height,
     map_width,
-    store_marker_color,
     store_marker_size,
 )
+from lib.data import zoom_for_radius
 
-# マーカーの基準サイズ（px）。テーマの相対サイズ（％）をこの値へ掛けて実サイズを得る。
+# 推進園マーカーの基準サイズ（px）。テーマの相対サイズ（％）をこの値へ掛けて実サイズを得る。
 # 100％ でおおむね従来の見た目（BeautifyIcon 既定）を保つ。
 _MARKER_BASE_PX = 30
-# 推進園マーカーの番号／店舗マーカーのカート字形の基準フォント（px、100％時）。
+# 推進園マーカーの番号の基準フォント（px、100％時）。
 _FACILITY_NUMBER_BASE_PX = 11
-_STORE_GLYPH_BASE_PX = 14
-from lib.data import zoom_for_radius
+
+# map_detail_zoom=0（固定しない）でも、情報粒度（タイル取得ズーム）が 15 以上に
+# なるときは 14 で頭打ちにする（SPEC §6.1.2 追補）。
+_DETAIL_ZOOM_CAP = 14
 
 
 def _legend_html() -> str:
@@ -92,11 +95,13 @@ def build_map(store_row, facilities_df, radius_km: float) -> folium.Map:
     # 情報粒度（詳細度）の固定: detail_zoom > 0 のとき native zoom を固定し、
     # 地図をズームしてもタイル画像を拡大縮小するだけにして粒度を一定に保つ（SPEC §6.1.2）。
     # ベースマップが提供するズーム上限を超えないようクランプする。
-    tile_opts: dict = {}
     detail_zoom = map_detail_zoom()
     if detail_zoom > 0:
         fixed = min(detail_zoom, bm["max_zoom"])
-        tile_opts = {"max_native_zoom": fixed, "min_native_zoom": fixed}
+        tile_opts: dict = {"max_native_zoom": fixed, "min_native_zoom": fixed}
+    else:
+        # 固定しない場合でも粒度は 14 で頭打ち（min は設定せず 14 以下はズームに追従）。
+        tile_opts = {"max_native_zoom": min(_DETAIL_ZOOM_CAP, bm["max_zoom"])}
     folium.TileLayer(
         tiles=bm["url"],
         attr=bm["attribution"],
@@ -117,23 +122,17 @@ def build_map(store_row, facilities_df, radius_km: float) -> folium.Map:
         fill_opacity=circle_fill_opacity(),
     ).add_to(m)
 
-    # --- 3. Store marker (SPEC §6.1.2, テーマ調整可) ---
-    # 任意の hex 色を指定できるよう folium.Icon（名前付き色のみ）ではなく BeautifyIcon を使う。
-    # サイズはテーマの相対サイズ（％）で調整する（100％＝既定）。
-    store_scale = store_marker_size()
-    store_px = round(_MARKER_BASE_PX * store_scale / 100)
-    store_glyph_px = round(_STORE_GLYPH_BASE_PX * store_scale / 100)
+    # --- 3. Store marker (SPEC §6.1.2) ---
+    # 店舗アイコンは同梱画像 images/icon.png（ピン型）を使う。サイズはテーマの相対サイズ
+    # （％）で調整し、ピン先端（tip）を店舗座標へ合わせる（icon_anchor）。
+    store_w, store_h = icons.store_icon_size(store_marker_size())
+    tip_rx, tip_ry = icons.store_icon_tip()
     folium.Marker(
         location=[lat, lon],
-        icon=BeautifyIcon(
-            icon="shopping-cart",
-            icon_shape="marker",
-            border_color=store_marker_color(),
-            background_color=store_marker_color(),
-            text_color="#FFFFFF",
-            icon_size=[store_px, store_px],
-            icon_anchor=[store_px // 2, store_px],
-            inner_icon_style=f"font-size:{store_glyph_px}px;line-height:{store_px}px;",
+        icon=folium.CustomIcon(
+            icon_image=icons.icon_path(),
+            icon_size=[store_w, store_h],
+            icon_anchor=[round(store_w * tip_rx), round(store_h * tip_ry)],
         ),
         tooltip=store_name,
     ).add_to(m)
