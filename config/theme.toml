@@ -20,7 +20,7 @@ store_marker_color  = "#111827"   # 中心の店舗マーカー色
 
 # 地図の背景（ベースマップ）。テーマ設定ページで変更できる。
 # 選択肢の id は lib/basemaps.py の BASEMAPS を参照:
-#   OSM: osm_standard / osm_hot
+#   OSM: osm_standard / osm_hot / osmfj_japan
 #   国土地理院: gsi_std / gsi_pale / gsi_photo / gsi_blank
 #   CARTO(OSMベース): carto_positron / carto_voyager / carto_dark
 [map]

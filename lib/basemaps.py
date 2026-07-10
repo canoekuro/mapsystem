@@ -38,6 +38,13 @@ BASEMAPS: dict[str, dict] = {
         "attribution": f"{_OSM_ATTR}, Tiles: Humanitarian OSM Team",
         "max_zoom": 19,
     },
+    "osmfj_japan": {
+        "label": "日本語スタイル",
+        "provider": PROVIDER_OSM,
+        "url": "https://tile.openstreetmap.jp/{z}/{x}/{y}.png",
+        "attribution": f"{_OSM_ATTR}, Tiles: OSMFJ",
+        "max_zoom": 18,
+    },
     # --- 国土地理院（GSI） ---
     "gsi_std": {
         "label": "標準地図",
