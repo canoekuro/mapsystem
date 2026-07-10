@@ -6,6 +6,14 @@ All notable changes to this project are documented in this file.
 
 ### 2026-07-10
 
+- feat: 対話地図の表示情報の粒度（詳細度）をズーム操作から切り離して固定できるように。
+  `config/theme.toml` `[map] map_detail_zoom`（既定 0=固定しない、1–19=その粒度で固定）を
+  追加し「テーマ設定」ページから調整可能に。`lib/map_builder.py` で `folium.TileLayer` の
+  `max_native_zoom`/`min_native_zoom` を同値（ベースマップの `max_zoom` へクランプ）に設定して
+  実現。対象は対話地図のみ（ダウンロードPNGは対象外）。`lib/colors.map_detail_zoom()` を新設。
+  [詳細](docs/history/20260710-010914-fixed-detail-zoom-plan.md) /
+  [結果](docs/history/20260710-010914-fixed-detail-zoom-result.md)
+
 - feat: 地図の背景（ベースマップ）に OSMFJ（OpenStreetMap Foundation Japan）の
   日本語スタイルタイル（`osmfj_japan`）を追加。提供元グループは新設せず既存の
   「OpenStreetMap」にまとめる。`lib/basemaps.py` の `BASEMAPS` に定義を追加し、
