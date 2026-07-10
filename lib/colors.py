@@ -47,7 +47,8 @@ _DEFAULTS: dict = {
     "map_width": 700,
     "map_height": 560,
     # 対話地図の情報粒度（詳細度）を固定するズームレベル。
-    # 0 = 固定しない（ズームに追従）。1–14 = そのズーム相当の粒度で固定。
+    # 0 = 固定しない（ズームに追従）だが粒度は 14 で頭打ち（15 以上にはしない）。
+    # 1–14 = そのズーム相当の粒度で固定。
     "map_detail_zoom": 0,
     # 推進園マーカー（番号付きの円）・店舗マーカー（カート）の相対サイズ（％）。
     # 100 = 既定サイズ。対話地図・ダウンロードPNGの両方に反映する。
@@ -235,7 +236,7 @@ def map_height() -> int:
 
 
 def map_detail_zoom() -> int:
-    """対話地図の情報粒度を固定するズーム（0=固定しない、1–14=その粒度で固定）。"""
+    """対話地図の情報粒度を固定するズーム（0=固定しない・粒度は14で頭打ち、1–14=その粒度で固定）。"""
     return int(get_theme()["map_detail_zoom"])
 
 
@@ -278,7 +279,7 @@ def theme_toml_text(values: dict) -> str:
         "# 対話地図（画面表示）のサイズ（px）。",
         f'map_width  = {int(theme["map_width"])}',
         f'map_height = {int(theme["map_height"])}',
-        "# 対話地図の情報粒度を固定するズーム（0=固定しない、1–14=その粒度で固定）。",
+        "# 対話地図の情報粒度を固定するズーム（0=固定しない・粒度は14で頭打ち、1–14=その粒度で固定）。",
         f'map_detail_zoom = {int(theme["map_detail_zoom"])}',
         "# 推進園マーカー・店舗マーカーの相対サイズ（％、100=既定）。対話地図・PNG両方に反映。",
         f'facility_marker_size = {int(theme["facility_marker_size"])}',
