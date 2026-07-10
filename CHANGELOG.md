@@ -4,6 +4,15 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+### 2026-07-10
+
+- feat: 地図の背景（ベースマップ）に OSMFJ（OpenStreetMap Foundation Japan）の
+  日本語スタイルタイル（`osmfj_japan`）を追加。提供元グループは新設せず既存の
+  「OpenStreetMap」にまとめる。`lib/basemaps.py` の `BASEMAPS` に定義を追加し、
+  `config/theme.toml` のコメントの id 一覧も更新。
+  [詳細](docs/history/20260710-003444-osmfj-basemap-plan.md) /
+  [結果](docs/history/20260710-003444-osmfj-basemap-result.md)
+
 ### 2026-07-09
 
 - feat: 対話地図（画面表示）のサイズ（幅・高さ px）を「テーマ設定」ページから調整可能に。
