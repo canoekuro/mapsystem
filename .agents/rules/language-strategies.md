@@ -2,6 +2,9 @@
 trigger: always_on
 ---
 
+<!-- SSoT: canoekuro/retrospective の agents-rules/language-strategies.md。
+     各repoの .agents/rules/ 配下はこのファイルの同期コピー。編集は retrospective 側で行い、
+     scripts/sync-agent-rules.sh で各repoへ再同期すること。 -->
 # Language Strategies (言語戦略)
 
 - **内部推論 (Internal Reasoning):** 精度を保つため英語が許可/推奨されます。ただし、ツール呼び出し時のパラメータ（上記 `TaskName` 等）は、出力直前に必ず日本語へ翻訳してください。
