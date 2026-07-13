@@ -4,6 +4,15 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+### 2026-07-13
+
+- change: 地図の帰属表示（GSI）を「出典: 国土地理院」から
+  「出典: 地理院タイルに店舗・推進園情報を追記して掲載」へ変更。地理院タイルに
+  店舗・推進園情報を重ねて掲載している実態に合わせた表記。`lib/basemaps.py` の
+  `_GSI_ATTR` を更新し、GSI の 4 スタイル（標準/淡色/航空写真/白地図）と、対話地図・
+  ダウンロード PNG・設定ページのキャプションに反映。提供元グループ名は変更なし。
+  [結果](docs/history/20260713-issue-shutten-henkou-result.md)
+
 ### 2026-07-10
 
 - feat: 対話地図の表示情報の粒度（詳細度）をズーム操作から切り離して固定できるように。

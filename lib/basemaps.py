@@ -14,7 +14,7 @@
 """
 
 _OSM_ATTR = "© OpenStreetMap contributors"
-_GSI_ATTR = "出典: 国土地理院"
+_GSI_ATTR = "出典: 地理院タイルに店舗・推進園情報を追記して掲載"
 _CARTO_ATTR = "© OpenStreetMap contributors © CARTO"
 
 PROVIDER_OSM = "OpenStreetMap"
