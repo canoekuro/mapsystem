@@ -8,6 +8,7 @@
 
 [theme]
 facility_fallback   = "#6B7280"   # 区分が想定外/未設定のときの色（灰）
+facility_color      = "#7030A0"   # 推進園マーカー/施設リストバッジの単一色（区分色分けは廃止）
 circle_color        = "#7C3AED"   # 半径円の線色
 circle_fill_opacity = 0.08        # 半径円の塗り透明度（0.0–1.0）
 band_color          = "#00BAC9"   # 見出し帯・施設リストヘッダーの背景色

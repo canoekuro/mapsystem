@@ -21,6 +21,7 @@ from lib.data import (
     prefectures_for_company,
     stores_for_company_prefectures,
     store_count_for_company_prefectures,
+    store_nursery_counts,
 )
 from lib.map_builder import build_map
 from lib.zip_builder import build_png_zip
@@ -46,16 +47,54 @@ def _header_html(store: str, radius: float) -> str:
         f"background-color:{band_color()};"
         f"color:#FFFFFF;height:64px;display:flex;align-items:center;"
         f"padding-left:24px;font-size:22px;font-weight:bold;"
-        f"border-radius:8px;margin-bottom:12px;"
+        f"border-radius:8px;margin-bottom:4px;"
         f'">'
         f"{store} 周辺マップ概要 ｜ 半径{radius}km圏内"
         f"</div>"
     )
 
 
+# 施設リストは 1 列あたり最大この件数を並べ、超過分は列を増やす（issue 202607161811）。
+_FACILITY_LIST_PER_COLUMN = 10
+# 各列の固定幅（px）。列がコンテナ幅を超えると横スクロールバーが出る（3 列以上で発生）。
+_FACILITY_COLUMN_WIDTH = 230
+
+
+def _facility_card_html(row) -> str:
+    """施設リストの 1 行カード（番号バッジ + 名称 + 距離）の HTML を返す。"""
+    color = facility_color(row["推進園区分"])
+    number = int(row["連番"])
+    name = row["推進園名称"]
+    distance = row["距離km"]
+    badge = (
+        '<div style="'
+        f"background-color:{color};"
+        "color:#FFFFFF;width:24px;height:24px;border-radius:50%;"
+        "display:flex;align-items:center;justify-content:center;"
+        "font-size:11px;font-weight:bold;flex-shrink:0;"
+        '">'
+        f"{number}"
+        "</div>"
+    )
+    info = (
+        '<div style="margin-left:8px;">'
+        f'<div style="font-size:14px;font-weight:bold;color:#111827;">{name}</div>'
+        f'<div style="font-size:12px;color:#6B7280;">約{distance:.2f}km</div>'
+        "</div>"
+    )
+    return (
+        '<div style="'
+        "display:flex;align-items:center;background-color:#FFFFFF;"
+        "border-bottom:1px solid #E5E7EB;padding:8px 8px;"
+        '">'
+        f"{badge}{info}"
+        "</div>"
+    )
+
+
 def _facility_list_html(fac) -> str:
-    parts: list[str] = []
-    parts.append(
+    """施設リストを 10 件/列で複数列に並べ、3 列以上のとき横スクロールさせる HTML。"""
+    header = (
         '<div style="'
         f"background-color:{band_color()};"
         "color:#FFFFFF;height:40px;display:flex;align-items:center;"
@@ -65,36 +104,76 @@ def _facility_list_html(fac) -> str:
         "施設リスト"
         "</div>"
     )
-    for _, row in fac.iterrows():
-        color = facility_color(row["推進園区分"])
-        number = int(row["連番"])
-        name = row["推進園名称"]
-        distance = row["距離km"]
-        badge = (
+
+    rows = list(fac.iterrows())
+    # 10 件ごとに列へ分割し、各列を固定幅の div にまとめる。
+    columns_html: list[str] = []
+    for start in range(0, len(rows), _FACILITY_LIST_PER_COLUMN):
+        chunk = rows[start : start + _FACILITY_LIST_PER_COLUMN]
+        cards = "".join(_facility_card_html(row) for _, row in chunk)
+        columns_html.append(
             '<div style="'
-            f"background-color:{color};"
-            "color:#FFFFFF;width:24px;height:24px;border-radius:50%;"
-            "display:flex;align-items:center;justify-content:center;"
-            "font-size:11px;font-weight:bold;flex-shrink:0;"
+            f"flex:0 0 auto;width:{_FACILITY_COLUMN_WIDTH}px;"
+            "border-right:1px solid #E5E7EB;"
             '">'
-            f"{number}"
+            f"{cards}"
             "</div>"
         )
-        info = (
-            '<div style="margin-left:8px;">'
-            f'<div style="font-size:14px;font-weight:bold;color:#111827;">{name}</div>'
-            f'<div style="font-size:12px;color:#6B7280;">約{distance:.2f}km</div>'
-            "</div>"
-        )
-        parts.append(
-            '<div style="'
-            "display:flex;align-items:center;background-color:#FFFFFF;"
-            "border-bottom:1px solid #E5E7EB;padding:8px 8px;"
-            '">'
-            f"{badge}{info}"
-            "</div>"
-        )
-    return "\n".join(parts)
+
+    # 列群を横並びにし、コンテナ幅を超えたら（＝3 列以上で）横スクロールバーを出す。
+    body = (
+        '<div style="display:flex;overflow-x:auto;">'
+        f"{''.join(columns_html)}"
+        "</div>"
+    )
+    return header + body
+
+
+# --- part6: 出荷実績（当年実績ケース数・前年比）テーブル ---------------------
+# NOTE: 実績・前年比の実データ源は未確定のため、現状は image1.png 準拠の「枠のみ」を
+# ダミー表示する（issue 202607161811）。実データ接続時は下記 _SALES_ROWS を廃し、
+# lib/data.py の新規データ源（店舗コード等をキーに結合）から値を差し込むこと。
+_SALES_ROWS = ("プラズマ計", "おい免", "ムテキッズ")
+_SALES_PLACEHOLDER = "—"
+
+
+def _sales_table_html() -> str:
+    """出荷実績（実績(箱数)/前年比(%)）のダミー枠テーブル HTML を返す。"""
+    head_bg = "#31597A"      # image1 のヘッダー帯（濃紺）
+    label_bg = "#E9EDF1"     # 行見出しの薄灰
+    cell_bg = "#F5F7F9"
+    border = "#D1D5DB"
+
+    header = (
+        "<tr>"
+        f'<th style="background:{head_bg};border:1px solid {border};"></th>'
+        f'<th style="background:{head_bg};color:#FFFFFF;border:1px solid {border};'
+        'padding:6px 8px;font-size:13px;text-align:center;">実績（箱数）</th>'
+        f'<th style="background:{head_bg};color:#FFFFFF;border:1px solid {border};'
+        'padding:6px 8px;font-size:13px;text-align:center;">前年比（%）</th>'
+        "</tr>"
+    )
+    body_rows = "".join(
+        "<tr>"
+        f'<td style="background:{label_bg};border:1px solid {border};'
+        f'padding:6px 8px;font-size:13px;font-weight:bold;color:#111827;">{name}</td>'
+        f'<td style="background:{cell_bg};border:1px solid {border};'
+        f'padding:6px 8px;font-size:13px;text-align:center;color:#6B7280;">{_SALES_PLACEHOLDER}</td>'
+        f'<td style="background:{cell_bg};border:1px solid {border};'
+        f'padding:6px 8px;font-size:13px;text-align:center;color:#6B7280;">{_SALES_PLACEHOLDER}</td>'
+        "</tr>"
+        for name in _SALES_ROWS
+    )
+    return (
+        '<div style="margin-top:12px;">'
+        '<table style="border-collapse:collapse;width:100%;">'
+        f"{header}{body_rows}"
+        "</table>"
+        '<div style="font-size:12px;color:#6B7280;margin-top:4px;text-align:right;">'
+        "出荷実績　期間：—"
+        "</div>"
+        "</div>"
+    )
 
 
 def _data_source_caption() -> None:
@@ -311,9 +390,12 @@ def render(companies: list[str]) -> None:
         n = len(fac)
         if n == 0:
             st.warning("該当する推進園がありません")
-        st.metric("対象推進園数", f"{n}件")
-        col_map, col_list = st.columns([2, 1])
+        # マップは固定サイズ（map_width×map_height）のまま、施設リストを 2 列入る幅へ広げる。
+        # 列比をマップ幅寄りにして左詰めにし（part4）、gap を詰める。
+        col_map, col_list = st.columns([3, 2], gap="small")
         with col_map:
+            # 対象推進園数はマップ上（左）に配置し、施設リストを帯直下へ寄せる（part3）。
+            st.metric("対象推進園数", f"{n}件")
             st_folium(
                 build_map(srow, fac, loaded_fetch_radius),
                 width=map_width(),
@@ -322,6 +404,22 @@ def render(companies: list[str]) -> None:
             )
         with col_list:
             st.markdown(_facility_list_html(fac), unsafe_allow_html=True)
+            # 施設リストの下に出荷実績（当年実績ケース数・前年比）のダミー枠を表示（part6）。
+            st.markdown(_sales_table_html(), unsafe_allow_html=True)
 
     # --- 出典フッタ（小さく） ---
     _data_source_caption()
+
+    # --- 店舗別 推進園数サマリ（出典表示の下, part1）---
+    # 取得済み DF（企業一致 & 距離km<=取得半径）を pandas 集計。企業全体の全店舗が対象。
+    summary = store_nursery_counts(df)
+    st.markdown("##### 店舗別 推進園数")
+    st.dataframe(summary, use_container_width=True, hide_index=True)
+    _summary_csv = summary.to_csv(index=False).encode("cp932", errors="replace")
+    st.download_button(
+        "店舗別推進園数ダウンロード",
+        data=_summary_csv,
+        file_name=f"{loaded_company}_{loaded_fetch_radius}km_店舗別推進園数.csv",
+        mime="text/csv",
+        use_container_width=True,
+    )

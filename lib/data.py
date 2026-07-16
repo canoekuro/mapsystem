@@ -211,6 +211,31 @@ def filter_company(
     )
 
 
+def store_nursery_counts(df: pd.DataFrame) -> pd.DataFrame:
+    """店舗ごとの推進園数（DISTINCT 推進園名称）の集計表を返す（issue 202607161811）。
+
+    取得済み DataFrame（``load_filtered`` で 企業名称一致 & 距離km<=取得半径 を適用済み）を
+    そのまま集計する。issue 記載の SQL
+
+        SELECT 店舗名称, 店舗コード, 店舗_都道府県, COUNT(DISTINCT 推進園名称) AS 推進園数
+        WHERE 企業名称 = 選択企業 AND 距離km <= 取得半径
+        GROUP BY 企業名称, 店舗名称, 店舗コード, 店舗_都道府県
+
+    の WHERE 条件は取得済み DF の生成条件と完全一致するため、新規クエリは不要
+    （企業名称は取得済み DF 内で単一）。列は 店舗名称 / 店舗コード / 店舗_都道府県 / 推進園数。
+    """
+    cols = ["店舗名称", "店舗コード", "店舗_都道府県"]
+    if df.empty:
+        return pd.DataFrame(columns=[*cols, "推進園数"])
+    return (
+        df.groupby(cols, as_index=False)["推進園名称"]
+        .nunique()
+        .rename(columns={"推進園名称": "推進園数"})
+        .sort_values(["店舗名称", "店舗コード"])
+        .reset_index(drop=True)
+    )
+
+
 # Web Mercator ground resolution at zoom 0, equator (meters/pixel for 256px tiles).
 _MPP_ZOOM0 = 156543.03392
 

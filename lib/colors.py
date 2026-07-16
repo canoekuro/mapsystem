@@ -37,6 +37,8 @@ _DEFAULTS: dict = {
         "幼稚園": "#4A3AA7",       # 紫
     },
     "facility_fallback": "#6B7280",   # 灰
+    # 推進園マーカー/施設リストバッジの単一色（区分による色分けは廃止, issue 202607161811）。
+    "facility_color": "#7030A0",
     "circle_color": "#7C3AED",
     "circle_fill_opacity": 0.08,
     "band_color": "#7C3AED",
@@ -77,6 +79,7 @@ _MARKER_SIZE_MAX = 200
 # スカラー（色/小数）のキー順。TOML 手組みと設定ページの両方で使う。
 _SCALAR_KEYS = (
     "facility_fallback",
+    "facility_color",
     "circle_color",
     "circle_fill_opacity",
     "band_color",
@@ -188,13 +191,17 @@ def facility_colors() -> dict[str, str]:
     return get_theme()["facility_colors"]
 
 
-def facility_color(category: str) -> str:
-    """推進園区分に対応する16進色を返す（未知値はフォールバック色）。"""
-    return facility_colors().get(category, get_theme()["facility_fallback"])
+def facility_color(category: str | None = None) -> str:
+    """推進園マーカー/バッジの単一色（16進）を返す。
+
+    区分による色分けは廃止し、全て同一色（テーマ ``facility_color``）で描画する
+    （issue 202607161811）。*category* は呼び出し側の後方互換のため受け取るが無視する。
+    """
+    return get_theme()["facility_color"]
 
 
-def facility_color_rgb(category: str) -> tuple[int, int, int]:
-    """推進園区分に対応する ``(R, G, B)`` タプルを返す（未知値はフォールバック色）。"""
+def facility_color_rgb(category: str | None = None) -> tuple[int, int, int]:
+    """推進園マーカー/バッジの単一色を ``(R, G, B)`` タプルで返す（区分色分けは廃止）。"""
     return hex_to_rgb(facility_color(category))
 
 

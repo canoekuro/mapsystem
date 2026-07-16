@@ -32,9 +32,7 @@ from lib.colors import (
     circle_color_rgb,
     circle_fill_opacity,
     facility_color_rgb,
-    facility_colors,
     facility_marker_size_for_radius,
-    hex_to_rgb,
     store_marker_size,
 )
 from lib.data import zoom_for_radius
@@ -58,9 +56,6 @@ _TILE_TIMEOUT = float(os.getenv("MAP_TILE_TIMEOUT", "15"))
 
 # Colors: 推進園区分・半径円・店舗マーカーは lib.colors（テーマ）から取得する（SPEC §6.1.2）。
 _WHITE = (255, 255, 255)
-_LEGEND_BG = (255, 255, 255)
-_LEGEND_BORDER = (229, 231, 235)    # #E5E7EB
-_LEGEND_TEXT = (17, 24, 39)         # #111827
 _ATTR_BG = (255, 255, 255)
 _ATTR_TEXT = (75, 85, 99)           # #4B5563
 
@@ -71,44 +66,6 @@ _FONT_PATH = os.path.join(os.path.dirname(__file__), "..", "fonts", "ipaexg.ttf"
 @lru_cache(maxsize=64)
 def _font(size: int) -> ImageFont.FreeTypeFont:
     return ImageFont.truetype(_FONT_PATH, size)
-
-
-def _draw_legend(draw: ImageDraw.ImageDraw, size: int) -> None:
-    """推進園区分の凡例を地図左下に描画する（SPEC §6.1.2、baked into the PNG）。"""
-    title_font = _font(13)
-    item_font = _font(12)
-
-    pad = 8
-    row_h = 18
-    dot_r = 6
-    title_h = 18
-    items = list(facility_colors().items())
-
-    text_w = max(draw.textlength(cat, font=item_font) for cat, _ in items)
-    title_w = draw.textlength("推進園区分", font=title_font)
-    box_w = int(pad * 2 + dot_r * 2 + 6 + max(text_w, title_w))
-    box_h = pad * 2 + title_h + row_h * len(items)
-
-    x0 = 12
-    y1 = size - 12
-    y0 = y1 - box_h
-    x1 = x0 + box_w
-
-    draw.rounded_rectangle(
-        [x0, y0, x1, y1], radius=6, fill=_LEGEND_BG, outline=_LEGEND_BORDER, width=1
-    )
-    draw.text((x0 + pad, y0 + pad), "推進園区分", font=title_font, fill=_LEGEND_TEXT, anchor="lt")
-
-    for i, (category, hex_color) in enumerate(items):
-        cy = y0 + pad + title_h + row_h * i + row_h / 2
-        dot_cx = x0 + pad + dot_r
-        draw.ellipse(
-            [dot_cx - dot_r, cy - dot_r, dot_cx + dot_r, cy + dot_r],
-            fill=hex_to_rgb(hex_color),
-        )
-        draw.text(
-            (dot_cx + dot_r + 6, cy), category, font=item_font, fill=_LEGEND_TEXT, anchor="lm"
-        )
 
 
 def _draw_attribution(draw: ImageDraw.ImageDraw, size: int, text: str) -> None:
@@ -282,8 +239,7 @@ def render_static_map(store_row, facilities_df, radius_km: float, size: int = 65
         icon_img,
     )
 
-    # --- Legend (推進園区分の色分け凡例) ---
-    _draw_legend(draw, size)
+    # 凡例は廃止（区分色分けをやめ単一色で描画するため, issue 202607161811）。
 
     # --- Tile attribution (提供元の帰属表示、右下) ---
     _draw_attribution(draw, size, bm["attribution"])
