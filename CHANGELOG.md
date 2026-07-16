@@ -4,6 +4,22 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+### 2026-07-16
+
+- feat: マップ概要画面を image1.png のレイアウトへ改修（issue 202607161811）。
+  - 推進園の区分色分けを廃止し、マーカー・施設リストバッジを単一色 `#7030A0` に統一。
+    地図・ダウンロード PNG の凡例（区分）を削除。`lib/colors.py` に `facility_color`
+    キー（テーマ）を追加し `facility_color()` を単一色返却へ変更、`config/theme.toml` に
+    既定値を追記。`lib/map_builder.py` / `lib/static_map.py` の凡例描画を除去。
+  - 施設リストを 1 列 10 件で複数列化し、列がコンテナ幅を超える（3 列以上）と横スクロール
+    バーを表示。列比を `[3, 2]`（`gap="small"`）へ広げ、マップを左詰めに。見出し帯の
+    余白と「対象推進園数」の配置を調整し、帯と施設リストの間隔を縮小。
+  - 施設リストの下に出荷実績（実績(箱数)/前年比(%)）のダミー枠テーブルを追加（実データ源は
+    未確定のため枠のみ、image1.png 準拠）。
+  - 出典表示の下に店舗別 推進園数サマリ表（店舗名称/店舗コード/都道府県/推進園数）と CSV
+    ダウンロードを追加。取得済み DataFrame の pandas 集計で算出（新規クエリ不要）。
+    `lib/data.store_nursery_counts()` を新設。
+
 ### 2026-07-13
 
 - change: 地図の帰属表示（GSI）を「出典: 国土地理院」から
