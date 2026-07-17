@@ -3,6 +3,9 @@ trigger: always_on
 globs: ["**/*"]
 ---
 
+<!-- SSoT: canoekuro/retrospective の agents-rules/indexing-codebase.md。
+     各repoの .agents/rules/ 配下はこのファイルの同期コピー。編集は retrospective 側で行い、
+     scripts/sync-agent-rules.sh で各repoへ再同期すること。 -->
 # Project Structure Awareness (プロジェクト構造認識)
 
 **Activation:** This rule is **ALWAYS ON** for all files (`**/*`).

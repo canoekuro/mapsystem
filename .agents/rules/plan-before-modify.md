@@ -1,3 +1,7 @@
+<!-- SSoT: canoekuro/retrospective の agents-rules/plan-before-modify.md。
+     各repoの .agents/rules/ 配下はこのファイルの同期コピー。編集は retrospective 側で行い、
+     scripts/sync-agent-rules.sh で各repoへ再同期すること。 -->
+
 # Plan Before Modify (事前計画と確認の義務化)
 
 **Activation:** This rule is **ALWAYS ON** for all code modifications, configuration changes, prompt changes, refactoring, documentation updates that record design decisions, and feature additions.
