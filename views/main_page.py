@@ -54,16 +54,15 @@ def _header_html(store: str, radius: float) -> str:
     )
 
 
-# 施設リストは 1 列あたり最大この件数を並べ、超過分は列を増やす（issue 202607161811）。
-_FACILITY_LIST_PER_COLUMN = 10
-# 各列の固定幅（px）。名称が折り返さず収まるよう広めに取る（issue image2）。
-# 帯・ボディの幅を 2 列ぶん（= _FACILITY_LIST_COLUMNS × この幅）に固定し、初期表示は 2 列
-# ぴったり、3 列目以降は横スクロールで到達させる（issue image2）。
-_FACILITY_COLUMN_WIDTH = 250
+# 施設リストは 1 列あたり最大この件数を並べ、超過分は列を増やす（issue image3 で 10→8）。
+_FACILITY_LIST_PER_COLUMN = 8
 # 帯（施設リスト）の見せ幅にあたる初期表示列数。これを超える列は横スクロールで表示。
+# 帯・ボディは col_list 全幅（width:100%）にし、各列はこの列数で等分（= 100/列数 %）してフィル
+# する（issue image3「帯を上の帯と右端そろえ、2 列の幅も広げる」）。
 _FACILITY_LIST_COLUMNS = 2
-# 帯・ボディの固定幅（px）＝ 初期表示 2 列ぶん。
-_FACILITY_LIST_WIDTH = _FACILITY_COLUMN_WIDTH * _FACILITY_LIST_COLUMNS
+# 施設リスト列（col_list）の st.columns 比率ウェイト。帯の px 幅ではなく、マップ列との
+# 面積比の基準として使う（image2「マップ–施設リスト間の余白を詰める」の挙動を保持）。
+_FACILITY_LIST_COL_WEIGHT = 500
 
 
 def _facility_card_html(row) -> str:
@@ -104,39 +103,41 @@ def _facility_card_html(row) -> str:
 
 
 def _facility_list_html(fac) -> str:
-    """施設リストを 10 件/列で複数列に並べ、初期表示は 2 列（帯幅）で 3 列目以降は横スクロール。"""
-    # 帯・ボディとも幅を 2 列ぶんに固定し、上に少し余白を足す（issue image2「もうちょっと隙間開けたい」）。
+    """施設リストを 8 件/列で複数列に並べ、初期表示は 2 列（帯幅を等分）で 3 列目以降は横スクロール。"""
+    # 帯・ボディとも col_list 全幅（width:100%）にし、上の「周辺マップ概要」帯と右端をそろえる
+    # （issue image3「この帯の幅揃えたい」）。上に少し余白（image2「もうちょっと隙間開けたい」）。
     header = (
         '<div style="'
         f"background-color:{band_color()};"
         "color:#FFFFFF;height:40px;display:flex;align-items:center;"
         "justify-content:center;font-size:16px;font-weight:bold;"
         "border-radius:4px 4px 0 0;"
-        f"width:{_FACILITY_LIST_WIDTH}px;max-width:100%;margin-top:12px;"
+        "width:100%;margin-top:12px;"
         '">'
         "施設リスト"
         "</div>"
     )
 
     rows = list(fac.iterrows())
-    # 10 件ごとに列へ分割し、各列を固定幅の div にまとめる（罫線＝列区切り線は削除, issue image2）。
+    # 8 件ごとに列へ分割。各列は帯幅を _FACILITY_LIST_COLUMNS で等分した幅（= 50%）でフィルし、
+    # 名称欄を広げる（issue image3「2 列の幅も広げる」）。min-width:0 で名称の ellipsis を維持。
+    # 罫線（列区切り線）は無し（issue image2）。
+    col_basis = f"{100 / _FACILITY_LIST_COLUMNS:.4f}%"
     columns_html: list[str] = []
     for start in range(0, len(rows), _FACILITY_LIST_PER_COLUMN):
         chunk = rows[start : start + _FACILITY_LIST_PER_COLUMN]
         cards = "".join(_facility_card_html(row) for _, row in chunk)
         columns_html.append(
             '<div style="'
-            f"flex:0 0 auto;width:{_FACILITY_COLUMN_WIDTH}px;"
+            f"flex:0 0 {col_basis};min-width:0;"
             '">'
             f"{cards}"
             "</div>"
         )
 
-    # ボディ幅も 2 列ぶんに固定。列群がこの幅を超えたら（＝3 列以上で）横スクロールで到達する。
+    # ボディも全幅。列群の合計が帯幅（＝2 列ぶん）を超えたら（＝3 列以上で）横スクロールで到達する。
     body = (
-        '<div style="display:flex;overflow-x:auto;'
-        f"width:{_FACILITY_LIST_WIDTH}px;max-width:100%;"
-        '">'
+        '<div style="display:flex;overflow-x:auto;width:100%;">'
         f"{''.join(columns_html)}"
         "</div>"
     )
@@ -404,11 +405,11 @@ def render(companies: list[str]) -> None:
         n = len(fac)
         if n == 0:
             st.warning("該当する推進園がありません")
-        # マップは固定サイズ（map_width×map_height）のまま、施設リストは 2 列ぶんの固定幅。
-        # 列比を各固定幅（マップ幅 : 施設リスト2列幅）の実 px に合わせ、両者の間の余白を最小化する
+        # マップは固定サイズ（map_width×map_height）。施設リストは col_list 全幅（帯・2 列とも）。
+        # 列比をマップ幅 : 施設リスト列ウェイトに合わせ、両者の間の余白を最小化する
         # （issue image2「ここの隙間もっと狭めたい」）。
         col_map, col_list = st.columns(
-            [map_width(), _FACILITY_LIST_WIDTH], gap="small"
+            [map_width(), _FACILITY_LIST_COL_WEIGHT], gap="small"
         )
         with col_map:
             # 対象推進園数はマップ上（左）に配置し、施設リストを帯直下へ寄せる（part3）。
