@@ -18,6 +18,11 @@ All notable changes to this project are documented in this file.
     右端をそろえ。2 列は帯幅を等分（各 50%）してフィルし、名称欄を拡張。
   - 1 列あたりの件数を 10 → 8 件に変更。初期表示 2 列・3 列目以降は横スクロールの方針は維持。
     `views/main_page.py` のみ変更。
+- feat: 「店舗別 推進園数」の表で店舗（行）をクリックすると、小売店名称に反映してマップを表示する
+  ようにした。`st.dataframe(on_select="rerun", selection_mode="single-row")` で行選択を検知し、
+  選択店舗を session_state へ退避 → 再実行して selectbox 生成前に反映（表が selectbox より下にあり
+  widget 生成後に値を書き換えられないため）。クリック時は都道府県フィルタを解除して、どの店舗でも
+  必ず選択できるようにした。`views/main_page.py` のみ変更。
 
 ### 2026-07-16
 
