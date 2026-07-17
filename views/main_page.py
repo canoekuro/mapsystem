@@ -359,14 +359,6 @@ def render(companies: list[str]) -> None:
     # --- 表示行（取得後のみ）: 都道府県 + 小売店 ---
     # 絞り込み順は 企業 → 取得半径 →（データ取得）→ 都道府県 → 小売店名称。
     # 都道府県は単一選択・任意で、未選択なら企業内の全店舗を候補にする。
-    # 「店舗別 推進園数」の表で選択された店舗を、小売店名称セレクトボックスへ反映する。
-    # 表は下部にあり widget 生成後に mp_store は書き換えられないため、下部で _pending_store に
-    # 退避 → rerun し、ここ（selectbox 生成前）で反映する。都道府県フィルタは解除して、
-    # どの店舗でも必ず候補に含まれるようにする。
-    pending_store = st.session_state.pop("_pending_store", None)
-    if pending_store is not None:
-        st.session_state.pop("mp_pref", None)
-        st.session_state["mp_store"] = pending_store
     pref_col, store_col = st.columns([1, 2])
     with pref_col:
         pref_opts_disp = prefectures_for_company(df, loaded_company)
@@ -440,27 +432,7 @@ def render(companies: list[str]) -> None:
     # 取得済み DF（企業一致 & 距離km<=取得半径）を pandas 集計。企業全体の全店舗が対象。
     summary = store_nursery_counts(df)
     st.markdown("##### 店舗別 推進園数")
-    st.caption("行をクリックすると、その店舗を小売店名称に反映してマップを表示します。")
-    # 行選択を有効化し、選択された店舗名を _pending_store に退避して再実行する。反映は上部の
-    # selectbox 生成前で行う（widget 生成後に mp_store を書き換えられない Streamlit の制約のため）。
-    event = st.dataframe(
-        summary,
-        use_container_width=True,
-        hide_index=True,
-        key="store_table",
-        on_select="rerun",
-        selection_mode="single-row",
-    )
-    selected_rows = event.selection["rows"]
-    if selected_rows:
-        clicked_store = summary.iloc[selected_rows[0]]["店舗名称"]
-        # 「前回この表から反映した店舗」と異なる=新しい行クリックのときだけ反映する。
-        # 選択状態は widget に保持されるため、mp_store 比較だと無限 rerun や、クリック後に
-        # selectbox を手動変更した際の巻き戻しが起きる。それを last_table_store で防ぐ。
-        if clicked_store != st.session_state.get("_last_table_store"):
-            st.session_state["_last_table_store"] = clicked_store
-            st.session_state["_pending_store"] = clicked_store
-            st.rerun()
+    st.dataframe(summary, use_container_width=True, hide_index=True)
     _summary_csv = summary.to_csv(index=False).encode("cp932", errors="replace")
     st.download_button(
         "店舗別推進園数ダウンロード",
