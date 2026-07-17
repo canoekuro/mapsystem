@@ -56,8 +56,14 @@ def _header_html(store: str, radius: float) -> str:
 
 # 施設リストは 1 列あたり最大この件数を並べ、超過分は列を増やす（issue 202607161811）。
 _FACILITY_LIST_PER_COLUMN = 10
-# 各列の固定幅（px）。列がコンテナ幅を超えると横スクロールバーが出る（3 列以上で発生）。
-_FACILITY_COLUMN_WIDTH = 230
+# 各列の固定幅（px）。名称が折り返さず収まるよう広めに取る（issue image2）。
+# 帯・ボディの幅を 2 列ぶん（= _FACILITY_LIST_COLUMNS × この幅）に固定し、初期表示は 2 列
+# ぴったり、3 列目以降は横スクロールで到達させる（issue image2）。
+_FACILITY_COLUMN_WIDTH = 250
+# 帯（施設リスト）の見せ幅にあたる初期表示列数。これを超える列は横スクロールで表示。
+_FACILITY_LIST_COLUMNS = 2
+# 帯・ボディの固定幅（px）＝ 初期表示 2 列ぶん。
+_FACILITY_LIST_WIDTH = _FACILITY_COLUMN_WIDTH * _FACILITY_LIST_COLUMNS
 
 
 def _facility_card_html(row) -> str:
@@ -76,16 +82,21 @@ def _facility_card_html(row) -> str:
         f"{number}"
         "</div>"
     )
+    # 名称は 1 行固定（折り返さず、はみ出しは末尾を「…」で省略）。ellipsis を効かせるため
+    # info/name とも min-width:0 + overflow:hidden にする（issue image2「折り返しにならないように」）。
     info = (
-        '<div style="margin-left:8px;">'
-        f'<div style="font-size:14px;font-weight:bold;color:#111827;">{name}</div>'
+        '<div style="margin-left:8px;min-width:0;overflow:hidden;">'
+        f'<div style="font-size:14px;font-weight:bold;color:#111827;'
+        'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'
+        f"{name}</div>"
         f'<div style="font-size:12px;color:#6B7280;">約{distance:.2f}km</div>'
         "</div>"
     )
+    # 罫線（カード下線）は削除（issue image2「枠線いらない」）。
     return (
         '<div style="'
         "display:flex;align-items:center;background-color:#FFFFFF;"
-        "border-bottom:1px solid #E5E7EB;padding:8px 8px;"
+        "padding:8px 8px;"
         '">'
         f"{badge}{info}"
         "</div>"
@@ -93,20 +104,22 @@ def _facility_card_html(row) -> str:
 
 
 def _facility_list_html(fac) -> str:
-    """施設リストを 10 件/列で複数列に並べ、3 列以上のとき横スクロールさせる HTML。"""
+    """施設リストを 10 件/列で複数列に並べ、初期表示は 2 列（帯幅）で 3 列目以降は横スクロール。"""
+    # 帯・ボディとも幅を 2 列ぶんに固定し、上に少し余白を足す（issue image2「もうちょっと隙間開けたい」）。
     header = (
         '<div style="'
         f"background-color:{band_color()};"
         "color:#FFFFFF;height:40px;display:flex;align-items:center;"
         "justify-content:center;font-size:16px;font-weight:bold;"
         "border-radius:4px 4px 0 0;"
+        f"width:{_FACILITY_LIST_WIDTH}px;max-width:100%;margin-top:12px;"
         '">'
         "施設リスト"
         "</div>"
     )
 
     rows = list(fac.iterrows())
-    # 10 件ごとに列へ分割し、各列を固定幅の div にまとめる。
+    # 10 件ごとに列へ分割し、各列を固定幅の div にまとめる（罫線＝列区切り線は削除, issue image2）。
     columns_html: list[str] = []
     for start in range(0, len(rows), _FACILITY_LIST_PER_COLUMN):
         chunk = rows[start : start + _FACILITY_LIST_PER_COLUMN]
@@ -114,15 +127,16 @@ def _facility_list_html(fac) -> str:
         columns_html.append(
             '<div style="'
             f"flex:0 0 auto;width:{_FACILITY_COLUMN_WIDTH}px;"
-            "border-right:1px solid #E5E7EB;"
             '">'
             f"{cards}"
             "</div>"
         )
 
-    # 列群を横並びにし、コンテナ幅を超えたら（＝3 列以上で）横スクロールバーを出す。
+    # ボディ幅も 2 列ぶんに固定。列群がこの幅を超えたら（＝3 列以上で）横スクロールで到達する。
     body = (
-        '<div style="display:flex;overflow-x:auto;">'
+        '<div style="display:flex;overflow-x:auto;'
+        f"width:{_FACILITY_LIST_WIDTH}px;max-width:100%;"
+        '">'
         f"{''.join(columns_html)}"
         "</div>"
     )
@@ -390,9 +404,12 @@ def render(companies: list[str]) -> None:
         n = len(fac)
         if n == 0:
             st.warning("該当する推進園がありません")
-        # マップは固定サイズ（map_width×map_height）のまま、施設リストを 2 列入る幅へ広げる。
-        # 列比をマップ幅寄りにして左詰めにし（part4）、gap を詰める。
-        col_map, col_list = st.columns([3, 2], gap="small")
+        # マップは固定サイズ（map_width×map_height）のまま、施設リストは 2 列ぶんの固定幅。
+        # 列比を各固定幅（マップ幅 : 施設リスト2列幅）の実 px に合わせ、両者の間の余白を最小化する
+        # （issue image2「ここの隙間もっと狭めたい」）。
+        col_map, col_list = st.columns(
+            [map_width(), _FACILITY_LIST_WIDTH], gap="small"
+        )
         with col_map:
             # 対象推進園数はマップ上（左）に配置し、施設リストを帯直下へ寄せる（part3）。
             st.metric("対象推進園数", f"{n}件")
