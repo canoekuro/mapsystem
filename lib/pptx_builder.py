@@ -79,17 +79,20 @@ def load_template_bytes(kind: str) -> bytes:
 
 
 def load_caption(store: str | None) -> str:
-    """選択中の小売店名称 *store* を config の定型文に差し込んだキャプション文字列を返す。
+    """選択中の小売店名称 *store* をテーマの定型文に差し込んだキャプション文字列を返す。
 
-    定型文は ``[pptx] store_caption_format``（既定 ``"{store}"``）。``{store}`` が
-    小売店名称に置換される。*store* が空/None のときは空文字を返す（テキスト挿入なし）。
+    定型文はテーマ設定（``config/theme.toml`` の ``[pptx] store_caption_format``、テーマ設定
+    ページで編集可）。``{store}`` が小売店名称に置換される。*store* が空/None のときは
+    空文字を返す（テキスト挿入なし）。書式不正時は店舗名のみを返す。
     """
     if not store:
         return ""
-    fmt = _load_pptx_config().get("store_caption_format", "{store}")
+    from lib import colors  # noqa: PLC0415
+
+    fmt = colors.store_caption_format()
     try:
         return fmt.format(store=store)
-    except (KeyError, IndexError) as e:  # noqa: PERF203
+    except (KeyError, IndexError, ValueError) as e:  # noqa: PERF203
         logger.warning("store_caption_format の書式が不正です（%r）: %s", fmt, e)
         return store
 

@@ -52,6 +52,9 @@ _DEFAULTS: dict = {
     "facility_marker_sizes": [150, 120, 100, 90, 80, 50],
     # 店舗マーカー（画像アイコン）の相対サイズ（％、100=既定）。両描画に反映。
     "store_marker_size": 100,
+    # 商談用資料・店舗POP（pptx）のテキスト枠に入れる定型文（issue 202607221450）。
+    # {store} が選択中の小売店名称に置換される。テーマ設定ページで編集できる。
+    "store_caption_format": "{store} 周辺マップ",
 }
 
 # 情報粒度固定ズームの許容範囲。0 は「固定しない」の意。
@@ -91,7 +94,7 @@ def default_theme() -> dict:
 
 
 def _load_from_file() -> dict:
-    """config/theme.toml の [theme] と [map] を読む。未存在時は空。"""
+    """config/theme.toml の [theme] / [map] / [pptx] を読む。未存在時は空。"""
     try:
         with open(_THEME_CONFIG_PATH, "rb") as f:
             data = tomllib.load(f)
@@ -109,6 +112,9 @@ def _load_from_file() -> dict:
     ):
         if key in map_section:
             loaded[key] = map_section[key]
+    pptx_section = data.get("pptx", {}) or {}
+    if "store_caption_format" in pptx_section:
+        loaded["store_caption_format"] = pptx_section["store_caption_format"]
     return loaded
 
 
@@ -139,6 +145,9 @@ def _merge(base: dict, extra: dict) -> None:
         elif key == "store_marker_size":
             if isinstance(value, (int, float)) and not isinstance(value, bool):
                 base[key] = max(_MARKER_SIZE_MIN, min(_MARKER_SIZE_MAX, int(value)))
+        elif key == "store_caption_format":
+            if isinstance(value, str) and value:
+                base[key] = value
         elif key in _SCALAR_KEYS:
             if isinstance(value, str) and value:
                 base[key] = value
@@ -258,7 +267,17 @@ def store_marker_size() -> int:
     return int(get_theme()["store_marker_size"])
 
 
+def store_caption_format() -> str:
+    """pptx テキスト枠に入れる定型文（``{store}`` が小売店名称に置換される）。"""
+    return get_theme()["store_caption_format"]
+
+
 # --- persistence ------------------------------------------------------------
+
+def _toml_basic_escape(s: str) -> str:
+    """TOML basic string 用に ``\\`` と ``"`` をエスケープする。"""
+    return s.replace("\\", "\\\\").replace('"', '\\"')
+
 
 def theme_toml_text(values: dict) -> str:
     """*values*（get_theme() 形式）を config/theme.toml と同じ書式の TOML 文字列にする。"""
@@ -288,6 +307,11 @@ def theme_toml_text(values: dict) -> str:
         + ", ".join(str(int(v)) for v in theme["facility_marker_sizes"])
         + "]",
         f'store_marker_size     = {int(theme["store_marker_size"])}',
+        "",
+        "# 商談用資料・店舗POP（pptx）のテキスト枠に入れる定型文（issue 202607221450）。",
+        "# {store} が選択中の小売店名称に置換される。",
+        "[pptx]",
+        f'store_caption_format = "{_toml_basic_escape(theme["store_caption_format"])}"',
     ]
     return "\n".join(lines) + "\n"
 
