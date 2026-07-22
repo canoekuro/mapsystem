@@ -385,15 +385,8 @@ def render(companies: list[str]) -> None:
         srow = store_rows.iloc[0]
         fac = filter_facilities(df, store, loaded_fetch_radius)
 
-        # マップを誤って操作した場合に初期表示へ戻すリセット。縦の余白を詰めるため、
-        # 「データ最終更新」キャプションと同じ行の右列（app.py が確保）へ横並びで配置する。
-        # スロットが無い場合（想定外）は従来どおり本文へフォールバックする。
-        # st_folium の key を変えると再マウントされ、build_map の初期位置/ズームに戻る。
-        reset_slot = st.session_state.get("_top_action_slot") or st
-        if reset_slot.button("マップをリセット", key="reset_map", use_container_width=True):
-            st.session_state["map_nonce"] = st.session_state.get("map_nonce", 0) + 1
-        nonce = st.session_state.get("map_nonce", 0)
-
+        # マップは固定画面（拡大縮小・移動を無効化, build_map）。誤操作でズレないため
+        # 「マップをリセット」ボタンは廃止した。
         st.markdown(_header_html(store, loaded_fetch_radius), unsafe_allow_html=True)
         n = len(fac)
         if n == 0:
@@ -411,7 +404,7 @@ def render(companies: list[str]) -> None:
                 build_map(srow, fac, loaded_fetch_radius),
                 width=map_width(),
                 height=map_height(),
-                key=f"map_{store}_{loaded_fetch_radius}_{nonce}",
+                key=f"map_{store}_{loaded_fetch_radius}",
             )
             # 商談用資料 / 店舗POP の pptx 用に、対話地図と同寸（map_width×map_height）の
             # 地図PNGを1回だけ生成し sidebar のボタンで使い回す（issue 202607221245）。
