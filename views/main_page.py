@@ -23,7 +23,7 @@ from lib.data import (
     store_nursery_counts,
 )
 from lib.map_builder import build_map
-from lib.pptx_builder import build_store_pptx, load_template_bytes
+from lib.pptx_builder import build_store_pptx, load_caption, load_template_bytes
 from lib.static_map import render_static_map
 
 logger = logging.getLogger(__name__)
@@ -50,9 +50,11 @@ def _store_map_png(df: pd.DataFrame, store: str, radius: float, width: int, heig
 
 # 商談用資料 / 店舗POP の pptx。地図PNG（_store_map_png）を使い回し、テンプレ種別ごとに
 # プレースホルダーへの貼り付けだけを行う（サーバ側の地図生成は店舗ごとに1回）。
+# store は画像プレースホルダーに加えテキストプレースホルダーへの定型文差し込み（issue 202607221450）
+# に使うほか、キャッシュキーにも含める（同一PNG+kindでも店舗が変われば別デッキになる）。
 @st.cache_data(show_spinner="資料を生成中...")
-def _store_pptx(map_png: bytes, kind: str) -> bytes:
-    return build_store_pptx(load_template_bytes(kind), map_png)
+def _store_pptx(map_png: bytes, kind: str, store: str | None) -> bytes:
+    return build_store_pptx(load_template_bytes(kind), map_png, load_caption(store))
 
 
 def _header_html(store: str, radius: float) -> str:
@@ -435,7 +437,7 @@ def _render_sidebar_downloads(
             st.caption("小売店を選択すると商談用資料・店舗POPを出力できます")
         st.download_button(
             "商談用資料ダウンロード",
-            data=_store_pptx(map_png, "shoudan") if not pptx_disabled else b"",
+            data=_store_pptx(map_png, "shoudan", store) if not pptx_disabled else b"",
             file_name=f"{store}_商談用資料.pptx",
             mime=_PPTX_MIME,
             disabled=pptx_disabled,
@@ -443,7 +445,7 @@ def _render_sidebar_downloads(
         )
         st.download_button(
             "店舗POPダウンロード",
-            data=_store_pptx(map_png, "pop") if not pptx_disabled else b"",
+            data=_store_pptx(map_png, "pop", store) if not pptx_disabled else b"",
             file_name=f"{store}_店舗POP.pptx",
             mime=_PPTX_MIME,
             disabled=pptx_disabled,
