@@ -59,6 +59,17 @@ _WHITE = (255, 255, 255)
 _ATTR_BG = (255, 255, 255)
 _ATTR_TEXT = (75, 85, 99)           # #4B5563
 
+# 推進園マーカーは対話地図（lib.map_builder）と同じ見た目にする（issue 202607221414）。
+# folium は _MARKER_BASE_PX=30（直径）なので、静的PNGは半径 15（＝直径30）を基準にする。
+# 番号フォントも folium の _FACILITY_NUMBER_BASE_PX=11 に合わせる。
+_FACILITY_MARKER_BASE_RADIUS = 15
+_FACILITY_NUMBER_BASE_PX = 11
+
+# 半径円の外周は対話地図（folium dash_array="8,8"）に合わせて破線で描く（issue 202607221414）。
+_CIRCLE_DASH_PX = 8
+_CIRCLE_GAP_PX = 8
+_CIRCLE_LINE_WIDTH = 2
+
 # Font (IPAexGothic, same file png_builder uses)
 _FONT_PATH = os.path.join(os.path.dirname(__file__), "..", "fonts", "ipaexg.ttf")
 
@@ -119,6 +130,44 @@ def _fetch_tile(z: int, x: int, y: int, url_template: str) -> bytes:
     resp = requests.get(url, headers={"User-Agent": _USER_AGENT}, timeout=_TILE_TIMEOUT)
     resp.raise_for_status()
     return resp.content
+
+
+def _draw_dashed_polyline(
+    draw: ImageDraw.ImageDraw,
+    points: list[tuple[float, float]],
+    color: tuple[int, int, int, int],
+    width: int = 2,
+    dash: int = 8,
+    gap: int = 8,
+) -> None:
+    """閉じた折れ線 *points* を「*dash* px 描画 / *gap* px 空き」の破線で描く。
+
+    折れ線の弧長に沿ってパターンを進めるので、頂点をまたいでも破線の間隔が一定になる
+    （対話地図の ``dash_array="8,8"`` と体裁を合わせるため, issue 202607221414）。
+    """
+    if len(points) < 2:
+        return
+    pts = list(points) + [points[0]]  # 始点へ戻して閉じる
+    pattern = dash + gap
+    traveled = 0.0  # パターン先頭からの累積距離
+    for (x0, y0), (x1, y1) in zip(pts, pts[1:]):
+        dx, dy = x1 - x0, y1 - y0
+        seg_len = math.hypot(dx, dy)
+        if seg_len == 0:
+            continue
+        ux, uy = dx / seg_len, dy / seg_len
+        pos = 0.0
+        while pos < seg_len:
+            phase = traveled % pattern
+            if phase < dash:  # 描画区間
+                step = min(dash - phase, seg_len - pos)
+                sx, sy = x0 + ux * pos, y0 + uy * pos
+                ex, ey = x0 + ux * (pos + step), y0 + uy * (pos + step)
+                draw.line([(sx, sy), (ex, ey)], fill=color, width=width)
+            else:  # 空き区間
+                step = min(pattern - phase, seg_len - pos)
+            pos += step
+            traveled += step
 
 
 # --- Rendering --------------------------------------------------------------
@@ -217,17 +266,22 @@ def render_static_map(
     overlay = Image.new("RGBA", base.size, (0, 0, 0, 0))
     odraw = ImageDraw.Draw(overlay)
     ring = [to_px(*_destination_point(clat, clon, b * 5, radius_km)) for b in range(72)]
-    odraw.polygon(ring, fill=(*circle_rgb, fill_alpha), outline=(*circle_rgb, 255))
-    # thicken the outline a touch
-    odraw.line(ring + [ring[0]], fill=(*circle_rgb, 255), width=2)
+    # 塗りは半透明で。外周は対話地図（folium dash_array="8,8"）に合わせ破線で描く
+    # （issue 202607221414）。
+    odraw.polygon(ring, fill=(*circle_rgb, fill_alpha))
+    _draw_dashed_polyline(
+        odraw, ring, (*circle_rgb, 255),
+        width=_CIRCLE_LINE_WIDTH, dash=_CIRCLE_DASH_PX, gap=_CIRCLE_GAP_PX,
+    )
     base = Image.alpha_composite(base, overlay)
 
     draw = ImageDraw.Draw(base)
 
     # --- Facility markers (colored circle + white number; サイズは地図半径ごとにテーマ調整可) ---
     fac_scale = facility_marker_size_for_radius(radius_km)
-    r = max(3, round(11 * fac_scale / 100))
-    badge_font = _font(max(6, round(12 * fac_scale / 100)))
+    # 対話地図（folium _MARKER_BASE_PX=30/直径, 番号 11px）と同径・同フォントに揃える。
+    r = max(3, round(_FACILITY_MARKER_BASE_RADIUS * fac_scale / 100))
+    badge_font = _font(max(6, round(_FACILITY_NUMBER_BASE_PX * fac_scale / 100)))
     for _, row in facilities_df.iterrows():
         px, py = to_px(float(row["推進園lat"]), float(row["推進園lon"]))
         color = facility_color_rgb(row["推進園区分"])

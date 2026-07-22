@@ -18,7 +18,6 @@ from lib.data import (
     load_stores,
     stores_for_company,
     filter_facilities,
-    filter_company,
     prefectures_for_company,
     stores_for_company_prefectures,
     store_nursery_counts,
@@ -238,23 +237,19 @@ def render(companies: list[str]) -> None:
     if st.session_state.get("mp_company") not in companies:
         st.session_state.pop("mp_company", None)
 
-    # --- 取得行（常時表示）: 企業 + 取得半径 + データ取得ボタン ---
-    g1, g2, g3 = st.columns([2, 1, 1])
-    with g1:
+    # --- 取得行（sidebar・常時表示）: 企業 + 取得半径 + データ取得ボタン ---
+    # 選択フィルタは sidebar に集約し、ダウンロードの上に配置する（issue 202607221414）。
+    with st.sidebar:
+        st.markdown("### 検索条件")
         company = st.selectbox(
             "企業名称", companies, index=None, placeholder="企業を選択してください",
             key="mp_company",
         )
-    with g2:
         fetch_radius = st.number_input(
             "取得半径(km)", min_value=1, max_value=None,
             value=None, step=1, format="%d", placeholder="半径を入力",
             key="mp_fetch_radius",
         )
-    with g3:
-        # ラベル高さ分のスペーサで selectbox/number_input と縦位置を揃える。
-        st.write("")
-        st.write("")
         fetch_disabled = company is None or fetch_radius is None
         fetch_clicked = st.button(
             "データ取得", disabled=fetch_disabled, use_container_width=True, type="primary"
@@ -280,17 +275,15 @@ def render(companies: list[str]) -> None:
     loaded_company = st.session_state["loaded_company"]
     loaded_fetch_radius = st.session_state["loaded_fetch_radius"]
 
-    # --- 取得件数サマリ（取得後は常時表示）---
     # 選択肢になる店舗数は小売店マスタ（距離非依存）から数える。圏内推進園0件の店舗も
     # 候補・集計表に残るため、ここは取得半径に依存しない（issue 202607221128）。
+    # 取得店舗数の件数表示は廃止（issue 202607221414）。0件時の案内のみ残す。
     n_stores = stores_df["店舗名称"].nunique() if len(stores_df) else 0
     if n_stores == 0:
         st.warning(
             f"取得店舗数: 0件 — {loaded_company} の小売店データが取得できませんでした"
             "（取得処理は成功しています）"
         )
-    else:
-        st.success(f"取得店舗数: {n_stores:,}件")
 
     # 現在の入力が取得済み条件と異なる場合は案内（旧データは表示し続ける）。
     changed = (company is not None and company != loaded_company) or (
@@ -309,22 +302,12 @@ def render(companies: list[str]) -> None:
         _data_source_caption()
         return
 
-    # ダウンロード系ボタンは sidebar へ移動した（issue 202607221245、折りたたみは廃止）。
-    # ここでは企業全体（取得半径以内）のローデータCSVを用意しておく（sidebar で使用）。
-    company = loaded_company
-    radius = loaded_fetch_radius
-    rawdata_csv = (
-        filter_company(df, company, radius)
-        .to_csv(index=False)
-        .encode("cp932", errors="replace")
-    )
-
-    # --- 表示行（取得後のみ）: 都道府県 + 小売店 ---
+    # --- 表示行（sidebar・取得後のみ）: 都道府県 + 小売店 ---
+    # 選択フィルタは sidebar に集約する（issue 202607221414）。取得行の下・ダウンロードの上。
     # 絞り込み順は 企業 → 取得半径 →（データ取得）→ 都道府県 → 小売店名称。
     # 選択肢は小売店マスタ（stores_df）から生成し、圏内推進園0件の店舗も候補に含める。
     # 都道府県は単一選択・任意で、未選択なら企業内の全店舗を候補にする。
-    pref_col, store_col = st.columns([1, 2])
-    with pref_col:
+    with st.sidebar:
         pref_opts_disp = prefectures_for_company(stores_df, loaded_company)
         # 保持値が現在の候補に無ければクリア（options 変化時の例外回避）。
         if st.session_state.get("mp_pref") not in pref_opts_disp:
@@ -334,7 +317,6 @@ def render(companies: list[str]) -> None:
             index=None, placeholder="都道府県で絞り込み（任意）",
             key="mp_pref",
         )
-    with store_col:
         store_opts = (
             stores_for_company_prefectures(stores_df, loaded_company, [pref])
             if pref
@@ -348,8 +330,6 @@ def render(companies: list[str]) -> None:
             index=None, placeholder="店舗を選択してください",
             key="mp_store",
         )
-
-    st.divider()
 
     # 選択中1店舗の地図PNG（商談用資料/店舗POP pptx 用）。店舗未選択・圏内0件では None。
     # sidebar のダウンロードボタンで使用する（issue 202607221245）。
@@ -406,10 +386,7 @@ def render(companies: list[str]) -> None:
             # 施設リストの下に出荷実績（当年実績ケース数・前年比）のダミー枠を表示（part6）。
             st.markdown(_sales_table_html(), unsafe_allow_html=True)
 
-    # --- 出典フッタ（小さく） ---
-    _data_source_caption()
-
-    # --- 店舗別 推進園数サマリ（出典表示の下, part1）---
+    # --- 店舗別 推進園数サマリ ---
     # 小売店マスタ（企業全体の全店舗）に、取得半径圏内の推進園数を left join。圏内0件の
     # 店舗も 推進園数=0 で残る（issue 202607221128）。表はここに表示し、ダウンロードは sidebar。
     summary = store_nursery_counts(stores_df, df)
@@ -417,12 +394,14 @@ def render(companies: list[str]) -> None:
     st.dataframe(summary, use_container_width=True, hide_index=True)
     summary_csv = summary.to_csv(index=False).encode("cp932", errors="replace")
 
+    # --- 出典フッタ（店舗別 推進園数表の下, issue 202607221414）---
+    _data_source_caption()
+
     # --- ダウンロード（sidebar へ集約, issue 202607221245）---
     _render_sidebar_downloads(
         company=loaded_company,
         radius=loaded_fetch_radius,
         store=store,
-        rawdata_csv=rawdata_csv,
         summary_csv=summary_csv,
         map_png=selected_map_png,
     )
@@ -432,24 +411,17 @@ def _render_sidebar_downloads(
     company: str,
     radius: float,
     store: str | None,
-    rawdata_csv: bytes,
     summary_csv: bytes,
     map_png: bytes | None,
 ) -> None:
     """ダウンロード系ボタンを sidebar にまとめて配置する（issue 202607221245）。
 
-    ローデータ・店舗別推進園数は企業全体（取得半径以内）が対象。商談用資料・店舗POP は
-    選択中の1店舗が対象で、店舗未選択／圏内推進園0件（*map_png* が None）のときは無効化する。
+    店舗別推進園数は企業全体（取得半径以内）が対象。商談用資料・店舗POP は選択中の1店舗が
+    対象で、店舗未選択／圏内推進園0件（*map_png* が None）のときは無効化する。
+    ローデータダウンロードは廃止した（issue 202607221414）。
     """
     with st.sidebar:
         st.markdown("### ダウンロード")
-        st.download_button(
-            "ローデータダウンロード",
-            data=rawdata_csv,
-            file_name=f"{company}_{radius}km.csv",
-            mime="text/csv",
-            use_container_width=True,
-        )
         st.download_button(
             "店舗別推進園数ダウンロード",
             data=summary_csv,

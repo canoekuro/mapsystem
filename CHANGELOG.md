@@ -6,6 +6,19 @@ All notable changes to this project are documented in this file.
 
 ### 2026-07-22
 
+- feat: マップ画面のUI整理・map/pptx体裁一致・施設色の単一化（issue 202607221414）。
+  - ローデータダウンロードボタンを廃止（`views/main_page.py`）。
+  - 選択フィルタ（企業名称・取得半径・データ取得・都道府県・小売店名称）を sidebar へ集約し、
+    ダウンロード群の上に配置。取得後に表示される取得店舗数の件数表示を廃止。
+  - データ出典の表記を「店舗別 推進園数」表の下へ移動。
+  - pptx（`lib/static_map.py`）の見た目を対話地図に一致：半径円の外周を破線化
+    （folium `dash_array="8,8"` に合わせた `_draw_dashed_polyline`）、推進園マーカーの円径・
+    番号フォントを folium（直径30px・番号11px）に一致。
+  - テーマの施設色を単一色（`facility_color`）に統一。未使用の区分別色（`facility_colors`）と
+    区分フォールバック（`facility_fallback`）を廃止（`config/theme.toml`・`lib/colors.py`・
+    `views/config_page.py`）。`theme_toml_text()` が単一色を出力するよう修正し、テーマ設定ページ
+    での色変更が対話地図・ダウンロードPNG・pptx の全経路へ反映されるようにした。
+
 - feat: アップロード拡張・DLボタンのsidebar集約・企業名称のstore_table化・map/pptx体裁一致（issue 202607221245）。
   - データ更新で `.xls` も受理（`views/upload_page.py`）。保存名はアップロードの拡張子を保持
     （`nursery.<ext>` / `store.<ext>`）。
