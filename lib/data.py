@@ -86,14 +86,16 @@ def load_company_names() -> list[str]:
 
 
 @st.cache_data(ttl=300, show_spinner=False)
-def load_table_last_updated() -> str | None:
+def load_table_last_updated_ts() -> pd.Timestamp | None:
     """
-    Return the JST datetime string of the table's latest data update, or None.
+    Return the JST ``pd.Timestamp`` of the table's latest data update, or None.
 
     Reads DESCRIBE HISTORY and keeps only data-modifying operations
     (WRITE/MERGE/UPDATE/DELETE/...), so maintenance operations such as
     OPTIMIZE/VACUUM do not count as "data updates".  Cached with a short TTL so
-    the display refreshes after a Databricks job updates the table.
+    callers refresh after a Databricks job updates the table.  This is the single
+    source of the "data last-updated" moment; both the header string
+    (``load_table_last_updated``) and the pptx date captions derive from it.
     """
     from pyspark.sql import functions as F  # noqa: PLC0415
 
@@ -116,7 +118,16 @@ def load_table_last_updated() -> str | None:
     ts = pd.Timestamp(pdf["ts"].iloc[0])
     if ts.tzinfo is None:  # serverless セッションは UTC 想定
         ts = ts.tz_localize("UTC")
-    return ts.tz_convert("Asia/Tokyo").strftime("%Y-%m-%d %H:%M")
+    return ts.tz_convert("Asia/Tokyo")
+
+
+def load_table_last_updated() -> str | None:
+    """Return the JST datetime string of the table's latest data update, or None.
+
+    ``load_table_last_updated_ts()`` を ``"%Y-%m-%d %H:%M"`` に整形した表示用文字列。
+    """
+    ts = load_table_last_updated_ts()
+    return ts.strftime("%Y-%m-%d %H:%M") if ts is not None else None
 
 
 @st.cache_data(show_spinner="データを取得中...")

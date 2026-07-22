@@ -6,6 +6,17 @@ All notable changes to this project are documented in this file.
 
 ### 2026-07-22
 
+- feat: pptx へデータ更新日時・啓発活動年の定型文キャプションを追加（issue 202607221705）。
+  `template.pptx` のテキストプレースホルダー（idx 昇順）へ「小売店名称／地図・店舗状況の時点／
+  啓発活動年」の3文言を差し込む。文言は `config/databricks_config.toml` の `[pptx]`
+  （`store_caption_format` / `map_status_caption_format` / `activity_caption_format`）とテーマ設定ページ
+  から編集可能。`{year}/{month}/{day}` はデータ最終更新日（JST）で、`lib/data.py` に
+  `load_table_last_updated_ts()`（JST `pd.Timestamp`）を新設し `DESCRIBE HISTORY` 由来の
+  最終更新日時から算出する。取得できないときは日付入りキャプションを挿入しない。
+  `lib/pptx_builder.py`（`load_dated_caption` / `_fill_text_placeholders` / `save_caption_formats`）・
+  `views/main_page.py`・`views/config_page.py`。
+  [詳細](docs/history/20260722-1705-issue-pptx-dated-captions-result.md)
+
 - feat: pptx のテキストプレースホルダーへ選択中の小売店名称を挿入（issue 202607221450）。
   定型文フォーマットを `config/databricks_config.toml` の `[pptx] store_caption_format`（`{store}` を店舗名に置換）
   で指定し、`lib/pptx_builder.py`（`load_caption` / `_fill_text_placeholder` / `build_store_pptx` の `caption_text`）
