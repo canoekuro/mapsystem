@@ -62,6 +62,9 @@ def build_map(store_row, facilities_df, radius_km: float) -> folium.Map:
     bm = get_basemap(basemap_id())
     m_width = map_width()
     m_height = map_height()
+    # 固定画面: 拡大縮小・移動を一切無効化し、build_map の初期中心/ズームで固定表示する
+    # （SPEC §6.1.2）。Leaflet の操作系オプションをすべて off にして誤操作でズレないようにし、
+    # これにより「マップをリセット」ボタンを不要にする。
     m = folium.Map(
         location=[lat, lon],
         zoom_start=zoom_for_radius(radius_km, lat, viewport_px=m_height, max_zoom=bm["max_zoom"]),
@@ -69,6 +72,13 @@ def build_map(store_row, facilities_df, radius_km: float) -> folium.Map:
         max_zoom=bm["max_zoom"],
         width=m_width,
         height=m_height,
+        zoom_control=False,      # ＋/− ズームボタンを非表示
+        dragging=False,          # ドラッグでの移動を無効
+        scrollWheelZoom=False,   # ホイールズームを無効
+        doubleClickZoom=False,   # ダブルクリックズームを無効
+        touchZoom=False,         # ピンチズームを無効
+        boxZoom=False,           # 範囲選択ズームを無効
+        keyboard=False,          # キーボード操作を無効
     )
     # 情報粒度（詳細度）の固定: detail_zoom > 0 のとき native zoom を固定し、
     # 地図をズームしてもタイル画像を拡大縮小するだけにして粒度を一定に保つ（SPEC §6.1.2）。

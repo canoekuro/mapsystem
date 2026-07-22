@@ -31,15 +31,12 @@ def _render_last_updated() -> None:
         logger.warning("テーブル更新日時の取得に失敗: %s", e)
         ts = None
     text = f"データ最終更新: {ts}（JST）" if ts else "データ最終更新: 取得できませんでした"
-    # 同じ行の左端にページ側のアクション（例: マップをリセット）、右端に更新日時を横並びで
-    # 置けるよう列を確保する。左列のコンテナを session_state 経由でページへ渡し、縦の余白を
-    # 1行分詰める。該当アクションが無いページ・状態では左列は空のまま（見た目に影響なし）。
-    col_action, col_caption = st.columns([1, 4], vertical_alignment="center")
-    col_caption.markdown(
+    # 更新日時は上部に右寄せで表示する（両ページ共通）。以前は左端にマップリセット用の
+    # アクション列を確保していたが、マップを固定画面化してリセットボタンを廃止したため列分割は不要。
+    st.markdown(
         f"<div style='text-align:right;color:#6B7280;font-size:0.875rem;'>{text}</div>",
         unsafe_allow_html=True,
     )
-    st.session_state["_top_action_slot"] = col_action
 
 
 def _map_page() -> None:

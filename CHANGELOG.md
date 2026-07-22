@@ -6,6 +6,13 @@ All notable changes to this project are documented in this file.
 
 ### 2026-07-22
 
+- feat: マップを固定画面化し「マップをリセット」ボタンを廃止。`lib/map_builder.py` の
+  `folium.Map` で拡大縮小・移動（`zoom_control`/`dragging`/`scrollWheelZoom`/`doubleClickZoom`/
+  `touchZoom`/`boxZoom`/`keyboard`）をすべて無効化し、初期中心/ズームで固定表示にする。
+  誤操作復帰用だったリセットボタンと再マウント機構（`map_nonce`, `views/main_page.py`）、および
+  リセットボタン用の左列スロット（`app.py` の `_top_action_slot`）を削除。`SPEC.md` §6.1.2 を改訂。
+  [詳細](docs/history/20260722-114623-fixed-map-screen-plan.md)
+
 - feat: pptx へデータ更新日時・啓発活動年の定型文キャプションを追加（issue 202607221705）。
   `template.pptx` のテキストプレースホルダー（idx 昇順）へ「小売店名称／地図・店舗状況の時点／
   啓発活動年」の3文言を差し込む。文言は `config/databricks_config.toml` の `[pptx]`
