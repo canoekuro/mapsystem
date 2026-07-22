@@ -11,7 +11,10 @@
 Functions
 ---------
 load_template_bytes(kind)               -- Volume からテンプレ取得（失敗時ローカルfallback）
-build_store_pptx(template_bytes, png)   -- 画像プレースホルダーに地図PNGを挿入して pptx bytes を返す
+load_caption(store)                     -- config の定型文に小売店名称を差し込んだ文字列を返す
+build_store_pptx(template_bytes, png, caption)
+                                        -- 画像プレースホルダーに地図PNGを挿入し、テキスト
+                                           プレースホルダーへ caption を入れて pptx bytes を返す
 """
 
 import io
@@ -75,6 +78,22 @@ def load_template_bytes(kind: str) -> bytes:
         return f.read()
 
 
+def load_caption(store: str | None) -> str:
+    """選択中の小売店名称 *store* を config の定型文に差し込んだキャプション文字列を返す。
+
+    定型文は ``[pptx] store_caption_format``（既定 ``"{store}"``）。``{store}`` が
+    小売店名称に置換される。*store* が空/None のときは空文字を返す（テキスト挿入なし）。
+    """
+    if not store:
+        return ""
+    fmt = _load_pptx_config().get("store_caption_format", "{store}")
+    try:
+        return fmt.format(store=store)
+    except (KeyError, IndexError) as e:  # noqa: PERF203
+        logger.warning("store_caption_format の書式が不正です（%r）: %s", fmt, e)
+        return store
+
+
 def _target_box(slide, prs):
     """画像を収める矩形 (left, top, width, height) を返し、対象プレースホルダーを削除する。
 
@@ -94,19 +113,43 @@ def _target_box(slide, prs):
     return (0, 0, prs.slide_width, prs.slide_height)
 
 
-def build_store_pptx(template_bytes: bytes, map_png_bytes: bytes) -> bytes:
+def _fill_text_placeholder(slide, text: str) -> None:
+    """スライドのテキストプレースホルダーに *text* を書き込む。
+
+    画像プレースホルダー（``insert_picture`` 可）は対象外とし、``text_frame`` を持つ
+    最初のプレースホルダーへ書き込む。テンプレによって idx/名前が異なりうるため idx は
+    ハードコードせず、型/能力ベースで検出する。対象が無ければ warning を出してスキップする。
+    """
+    for ph in slide.placeholders:
+        if hasattr(ph, "insert_picture"):
+            continue
+        if ph.has_text_frame:
+            ph.text_frame.text = text
+            return
+    logger.warning("テキストプレースホルダーが見つかりませんでした（caption=%r）", text)
+
+
+def build_store_pptx(
+    template_bytes: bytes, map_png_bytes: bytes, caption_text: str | None = None
+) -> bytes:
     """Place *map_png_bytes* into the template's picture placeholder → pptx bytes.
 
     地図PNGを 1 枚目スライドの画像プレースホルダー位置へ貼り付ける。プレースホルダーの
     ``insert_picture`` は画像をプレースホルダーのアスペクト比にクロップしてしまい、対話地図と
     体裁が合わなくなる（issue 202607221245）。そこで、プレースホルダーの矩形内に **アスペクト比を
     保ったまま**収まるよう ``add_picture`` で中央配置する（元プレースホルダーは削除）。
+
+    *caption_text* が指定された場合は、テキストプレースホルダーへその文字列を書き込む
+    （issue 202607221450）。画像プレースホルダーとは別枠のため画像貼り付けと干渉しない。
     """
     from PIL import Image  # noqa: PLC0415
     from pptx import Presentation  # noqa: PLC0415
 
     prs = Presentation(io.BytesIO(template_bytes))
     slide = prs.slides[0]
+
+    if caption_text:
+        _fill_text_placeholder(slide, caption_text)
 
     box_left, box_top, box_w, box_h = _target_box(slide, prs)
 

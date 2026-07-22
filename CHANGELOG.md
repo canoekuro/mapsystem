@@ -6,6 +6,12 @@ All notable changes to this project are documented in this file.
 
 ### 2026-07-22
 
+- feat: pptx のテキストプレースホルダーへ選択中の小売店名称を挿入（issue 202607221450）。
+  定型文フォーマットを `config/databricks_config.toml` の `[pptx] store_caption_format`（`{store}` を店舗名に置換）
+  で指定し、`lib/pptx_builder.py`（`load_caption` / `_fill_text_placeholder` / `build_store_pptx` の `caption_text`）
+  と `views/main_page.py`（`_store_pptx` に `store` を渡す）で商談用資料・店舗POP に反映。
+  [詳細](docs/history/20260722-071920-issue-pptx-store-caption-plan.md)
+
 - feat: マップ画面のUI整理・map/pptx体裁一致・施設色の単一化（issue 202607221414）。
   - ローデータダウンロードボタンを廃止（`views/main_page.py`）。
   - 選択フィルタ（企業名称・取得半径・データ取得・都道府県・小売店名称）を sidebar へ集約し、
