@@ -20,7 +20,3 @@ pop_template = "to_pop.pptx"
 
 # Databricks にアクセスできないときのフォールバック（リポジトリ同梱）
 local_fallback = "images/template.pptx"
-
-# テキストプレースホルダーに入れる定型文（issue 202607221450）。
-# {store} が選択中の小売店名称に置換される。商談用資料・店舗POP で共通。
-store_caption_format = "{store} 周辺マップ"

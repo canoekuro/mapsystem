@@ -35,6 +35,7 @@ _MAP_WIDTH_KEY = "cfg_map_width"
 _MAP_HEIGHT_KEY = "cfg_map_height"
 _MAP_DETAIL_ZOOM_KEY = "cfg_map_detail_zoom"
 _STORE_MARKER_SIZE_KEY = "cfg_store_marker_size"
+_CAPTION_KEY = "cfg_store_caption_format"
 
 # 推進園マーカーサイズ（半径バケット別）の session_state キーとラベル。
 # theme["facility_marker_sizes"] の要素順（[≤1,≤2,≤3,≤4,≤5,>5]km）に対応する。
@@ -57,6 +58,7 @@ def _init_state() -> None:
     for key, size in zip(_FACILITY_MARKER_SIZE_KEYS, current["facility_marker_sizes"]):
         st.session_state.setdefault(key, int(size))
     st.session_state.setdefault(_STORE_MARKER_SIZE_KEY, int(current["store_marker_size"]))
+    st.session_state.setdefault(_CAPTION_KEY, current["store_caption_format"])
 
 
 def _reset_to_default() -> None:
@@ -76,6 +78,7 @@ def _reset_to_default() -> None:
     for key, size in zip(_FACILITY_MARKER_SIZE_KEYS, d["facility_marker_sizes"]):
         st.session_state[key] = int(size)
     st.session_state[_STORE_MARKER_SIZE_KEY] = int(d["store_marker_size"])
+    st.session_state[_CAPTION_KEY] = d["store_caption_format"]
 
 
 def _collect_values() -> dict:
@@ -90,6 +93,7 @@ def _collect_values() -> dict:
         int(st.session_state[key]) for key in _FACILITY_MARKER_SIZE_KEYS
     ]
     values["store_marker_size"] = int(st.session_state[_STORE_MARKER_SIZE_KEY])
+    values["store_caption_format"] = st.session_state[_CAPTION_KEY]
     return values
 
 
@@ -231,6 +235,17 @@ def render() -> None:
         "店舗マーカー(%)", min_value=50, max_value=200, step=10,
         key=_STORE_MARKER_SIZE_KEY,
     )
+
+    st.subheader("資料キャプション（pptx）")
+    st.caption(
+        "商談用資料・店舗POP のテキスト枠に入る定型文。"
+        "{store} が選択中の小売店名称に置換されます。"
+    )
+    st.text_input("キャプション定型文", key=_CAPTION_KEY)
+    try:
+        st.caption(f"例: {str(st.session_state[_CAPTION_KEY]).format(store='サンプル店')}")
+    except (KeyError, IndexError, ValueError):
+        st.warning("定型文の書式が不正です（利用できる差込みは {store} のみです）。")
 
     values = _collect_values()
 

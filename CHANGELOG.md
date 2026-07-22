@@ -11,6 +11,10 @@ All notable changes to this project are documented in this file.
   で指定し、`lib/pptx_builder.py`（`load_caption` / `_fill_text_placeholder` / `build_store_pptx` の `caption_text`）
   と `views/main_page.py`（`_store_pptx` に `store` を渡す）で商談用資料・店舗POP に反映。
   [詳細](docs/history/20260722-071920-issue-pptx-store-caption-plan.md)
+  - キャプション定型文をテーマ設定ページで編集できるよう `config/theme.toml` の `[pptx] store_caption_format`
+    へ移設（`lib/colors.py` にアクセサ・`[pptx]` セクションの読取/`theme_toml_text` 出力・TOMLエスケープを追加、
+    `views/config_page.py` にテキスト入力を追加、`load_caption` をテーマ参照に変更）。
+    [詳細](docs/history/20260722-075123-issue-pptx-caption-theme-plan.md)
 
 - feat: マップ画面のUI整理・map/pptx体裁一致・施設色の単一化（issue 202607221414）。
   - ローデータダウンロードボタンを廃止（`views/main_page.py`）。
