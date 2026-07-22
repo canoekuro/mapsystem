@@ -5,6 +5,7 @@ Functions
 ---------
 load_company_names()                   -- cached lightweight distinct 企業名称 loader
 load_filtered()                        -- fetch one company within fetch radius (Spark-side filter)
+load_stores()                          -- fetch the store master for one company (no radius filter)
 store_names(df)                        -- unique store names (sorted)
 company_names(df)                      -- unique company names (sorted)
 filter_facilities()                    -- filter by store + radius, add 連番
@@ -43,13 +44,17 @@ def _load_databricks_config() -> dict:
         return {}
 
 
-def _table_and_spark():
-    """Return (table_name, spark_session) for Databricks queries."""
+def _table_and_spark(key: str = "table"):
+    """Return (table_name, spark_session) for Databricks queries.
+
+    *key* selects which config entry under ``[databricks]`` to read: ``table``
+    (店舗×推進園 結合テーブル、既定) or ``store_table``（小売店マスタ）。
+    """
     from databricks.connect import DatabricksSession  # noqa: PLC0415
 
     config = _load_databricks_config()
-    # TODO: config/databricks_config.toml の table キーに実際のテーブル名を設定してください
-    table_name = config.get("table", "catalog.schema.table_name")
+    # TODO: config/databricks_config.toml の table / store_table キーに実際のテーブル名を設定してください
+    table_name = config.get(key, "catalog.schema.table_name")
     spark = DatabricksSession.builder.serverless(True).getOrCreate()
     return table_name, spark
 
@@ -136,6 +141,34 @@ def load_filtered(company: str, fetch_radius_km: float) -> pd.DataFrame:
     return _rename_to_app_columns(sdf.toPandas())
 
 
+@st.cache_data(show_spinner="小売店を取得中...")
+def load_stores(company: str) -> pd.DataFrame:
+    """Fetch the store master rows for one *company* from ``store_table``.
+
+    小売店マスタ（企業名称/店舗名称/店舗コード/店舗_都道府県 の DISTINCT）を企業で
+    絞って取得する。``load_filtered`` が距離で削るのと異なり距離条件を課さないため、
+    圏内推進園0件の店舗も残る。これを選択肢・下部集計表の土台に使う（issue 202607221128）。
+    Cached by *company*.
+    """
+    from pyspark.sql import functions as F  # noqa: PLC0415
+
+    mapping = _load_column_mapping()
+    company_col = mapping.get("企業名称", "企業名称")
+    select_cols = [
+        mapping.get(c, c)
+        for c in ("企業名称", "店舗名称", "店舗コード", "店舗_都道府県")
+    ]
+
+    table_name, spark = _table_and_spark(key="store_table")
+    sdf = (
+        spark.table(table_name)
+        .where(F.col(company_col) == company)
+        .select(*select_cols)
+        .distinct()
+    )
+    return _rename_to_app_columns(sdf.toPandas())
+
+
 def store_names(df: pd.DataFrame) -> list[str]:
     """Return unique 店舗名称 values sorted ascending."""
     return sorted(df["店舗名称"].unique().tolist())
@@ -211,29 +244,35 @@ def filter_company(
     )
 
 
-def store_nursery_counts(df: pd.DataFrame) -> pd.DataFrame:
-    """店舗ごとの推進園数（DISTINCT 推進園名称）の集計表を返す（issue 202607161811）。
+def store_nursery_counts(
+    stores_df: pd.DataFrame, nursery_df: pd.DataFrame
+) -> pd.DataFrame:
+    """小売店マスタに圏内推進園数を left join した集計表を返す。
 
-    取得済み DataFrame（``load_filtered`` で 企業名称一致 & 距離km<=取得半径 を適用済み）を
-    そのまま集計する。issue 記載の SQL
+    *stores_df* は ``load_stores`` の小売店マスタ（企業内の全店舗）、*nursery_df* は
+    ``load_filtered`` の店舗×推進園（企業名称一致 & 距離km<=取得半径）。
 
-        SELECT 店舗名称, 店舗コード, 店舗_都道府県, COUNT(DISTINCT 推進園名称) AS 推進園数
-        WHERE 企業名称 = 選択企業 AND 距離km <= 取得半径
-        GROUP BY 企業名称, 店舗名称, 店舗コード, 店舗_都道府県
-
-    の WHERE 条件は取得済み DF の生成条件と完全一致するため、新規クエリは不要
-    （企業名称は取得済み DF 内で単一）。列は 店舗名称 / 店舗コード / 店舗_都道府県 / 推進園数。
+    推進園数は *nursery_df* から ``COUNT(DISTINCT 推進園名称)`` を店舗キーで集計し、
+    小売店マスタへ **left join** して埋める。圏内0件の店舗も残り、推進園数は 0 になる
+    （issue 202607221128: 圏内0件の店舗が集計表から消える問題の解消）。
+    列は 店舗名称 / 店舗コード / 店舗_都道府県 / 推進園数。
     """
     cols = ["店舗名称", "店舗コード", "店舗_都道府県"]
-    if df.empty:
+    if stores_df.empty:
         return pd.DataFrame(columns=[*cols, "推進園数"])
-    return (
-        df.groupby(cols, as_index=False)["推進園名称"]
-        .nunique()
-        .rename(columns={"推進園名称": "推進園数"})
-        .sort_values(["店舗名称", "店舗コード"])
-        .reset_index(drop=True)
-    )
+
+    base = stores_df[cols].drop_duplicates()
+    if nursery_df.empty:
+        counts = pd.DataFrame(columns=[*cols, "推進園数"])
+    else:
+        counts = (
+            nursery_df.groupby(cols, as_index=False)["推進園名称"]
+            .nunique()
+            .rename(columns={"推進園名称": "推進園数"})
+        )
+    merged = base.merge(counts, on=cols, how="left")
+    merged["推進園数"] = merged["推進園数"].fillna(0).astype(int)
+    return merged.sort_values(["店舗名称", "店舗コード"]).reset_index(drop=True)
 
 
 # Web Mercator ground resolution at zoom 0, equator (meters/pixel for 256px tiles).

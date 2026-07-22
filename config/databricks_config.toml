@@ -8,7 +8,16 @@
 
 [databricks]
 # TODO: 実際のテーブル名に変更してください
+# 店舗×推進園の結合テーブル（距離km を持つ）。マップ・施設リストの元データ。
 table = "catalog.schema.table_name"
+
+# 小売店マスタテーブル（企業名称/店舗名称/店舗コード/店舗_都道府県 の DISTINCT）。
+# 圏内推進園0件の店舗も選択肢・集計表に残すため、table とは別に取得する（issue 202607221128）。
+# 例:
+#   CREATE OR REPLACE TABLE kh_aigrd_databricks_prd_01.default.immue_promo_store AS
+#   SELECT DISTINCT 企業名称, 店舗名称, 店舗コード, 店舗_都道府県
+#   FROM kh_aigrd_databricks_prd_01.default.immune_promo_nursery
+store_table = "catalog.schema.store_table_name"
 
 # データ更新（アップロード）機能の格納先 Volume フォルダ。
 # アップロードされた Excel は固定名で各フォルダへ格納される
@@ -19,3 +28,15 @@ table = "catalog.schema.table_name"
 nursery_dir = "/Volumes/catalog/schema/volume_name/nursery"
 # 店舗データ（store.xlsx）の格納先フォルダ
 store_dir = "/Volumes/catalog/schema/volume_name/store"
+
+# 商談用資料 / 店舗POP ダウンロードの PowerPoint テンプレート（issue 202607221128）。
+# 地図画像をテンプレートの画像プレースホルダーに貼り付けた pptx を生成する。
+# Databricks 上では template_dir/{shoudan_template,pop_template} を Volume から取得し、
+# 取得に失敗（ローカル開発など）した場合は local_fallback を用いる。
+[pptx]
+# TODO: 実際の Volume パスに変更してください
+template_dir = "/Volumes/kh_aigrd_databricks_prd_01/default/immune_promo_nursery/pptx_template"
+shoudan_template = "to_shoudan.pptx"
+pop_template = "to_pop.pptx"
+# Databricks にアクセスできないときのフォールバック（リポジトリ同梱）
+local_fallback = "images/template.pptx"
