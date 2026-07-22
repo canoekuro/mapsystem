@@ -1,7 +1,7 @@
 """
 テーマ設定ページ。
 
-凡例（推進園区分）・半径円・見出し帯の配色と、地図の背景（ベースマップ）・マーカーサイズを
+施設の色（単一色）・半径円・見出し帯の配色と、地図の背景（ベースマップ）・マーカーサイズを
 画面から調整する。値は lib.colors のテーマ（config/theme.toml）を source of truth とし、
 「保存」で config/theme.toml を書き換える。Databricks Apps はファイルシステムが揮発性のため、
 恒久化するには「設定TOMLをダウンロード」で得た内容をリポジトリにコミットすること。
@@ -21,16 +21,13 @@ from lib import colors as theme
 logger = logging.getLogger(__name__)
 
 # (session_state キー, ラベル, テーマキー)
+# 施設の色は区分色分けを廃止し単一色（facility_color）で扱う（issue 202607221414）。
 _SCALAR_PICKERS = [
+    ("cfg_facility_color", "施設の色", "facility_color"),
     ("cfg_circle_color", "半径円の線色", "circle_color"),
     ("cfg_band_color", "見出し帯・施設リストヘッダー", "band_color"),
-    ("cfg_facility_fallback", "区分フォールバック（想定外/未設定）", "facility_fallback"),
 ]
 _OPACITY_KEY = "cfg_circle_fill_opacity"
-
-
-def _facility_key(category: str) -> str:
-    return f"cfg_facility_{category}"
 
 
 _BASEMAP_KEY = "cfg_basemap"
@@ -53,8 +50,6 @@ def _init_state() -> None:
     for key, _label, tkey in _SCALAR_PICKERS:
         st.session_state.setdefault(key, current[tkey])
     st.session_state.setdefault(_OPACITY_KEY, float(current["circle_fill_opacity"]))
-    for category, color in current["facility_colors"].items():
-        st.session_state.setdefault(_facility_key(category), color)
     st.session_state.setdefault(_BASEMAP_KEY, theme.basemap_id())
     st.session_state.setdefault(_MAP_WIDTH_KEY, int(current["map_width"]))
     st.session_state.setdefault(_MAP_HEIGHT_KEY, int(current["map_height"]))
@@ -70,8 +65,6 @@ def _reset_to_default() -> None:
     for key, _label, tkey in _SCALAR_PICKERS:
         st.session_state[key] = d[tkey]
     st.session_state[_OPACITY_KEY] = float(d["circle_fill_opacity"])
-    for category, color in d["facility_colors"].items():
-        st.session_state[_facility_key(category)] = color
     # ベースマップと、それに連動する提供元/スタイルのウィジェット状態も既定へ。
     st.session_state[_BASEMAP_KEY] = d["basemap"]
     default_provider = basemaps.get_basemap(d["basemap"])["provider"]
@@ -85,13 +78,10 @@ def _reset_to_default() -> None:
     st.session_state[_STORE_MARKER_SIZE_KEY] = int(d["store_marker_size"])
 
 
-def _collect_values(categories: list[str]) -> dict:
+def _collect_values() -> dict:
     """現在のウィジェット状態を theme 形式の dict にまとめる。"""
     values = {tkey: st.session_state[key] for key, _label, tkey in _SCALAR_PICKERS}
     values["circle_fill_opacity"] = float(st.session_state[_OPACITY_KEY])
-    values["facility_colors"] = {
-        cat: st.session_state[_facility_key(cat)] for cat in categories
-    }
     values["basemap"] = st.session_state[_BASEMAP_KEY]
     values["map_width"] = int(st.session_state[_MAP_WIDTH_KEY])
     values["map_height"] = int(st.session_state[_MAP_HEIGHT_KEY])
@@ -128,11 +118,14 @@ def _basemap_selector() -> None:
 
 
 def _preview_html(values: dict) -> str:
-    """選択中の配色でプレビュー（見出し帯・凡例・施設リスト・半径円）を組む。"""
+    """選択中の配色でプレビュー（見出し帯・施設リスト・半径円）を組む。
+
+    施設は単一色（区分色分けは廃止, issue 202607221414）なので凡例は表示しない。
+    """
     band = values["band_color"]
     circle = values["circle_color"]
     opacity = values["circle_fill_opacity"]
-    fac = values["facility_colors"]
+    facility = values["facility_color"]
     # プレビューのバッジは半径非依存のため固定サイズ（100%相当）で描画する。
     badge_px = 24
     badge_font_px = 12
@@ -142,27 +135,15 @@ def _preview_html(values: dict) -> str:
         "align-items:center;justify-content:center;font-weight:bold;"
         'border-radius:6px;margin-bottom:10px;">見出し帯・施設リスト</div>'
     )
-    legend_rows = "".join(
-        f'<div style="display:flex;align-items:center;margin:2px 0;">'
-        f'<span style="width:14px;height:14px;border-radius:50%;background:{col};'
-        'display:inline-block;margin-right:8px;"></span>'
-        f'<span style="font-size:13px;color:#111827;">{cat}</span></div>'
-        for cat, col in fac.items()
-    )
-    legend = (
-        '<div style="display:inline-block;background:#fff;border:1px solid #E5E7EB;'
-        'border-radius:6px;padding:8px 12px;box-shadow:0 1px 4px rgba(0,0,0,0.15);">'
-        '<div style="font-size:13px;font-weight:bold;margin-bottom:4px;">推進園区分</div>'
-        f"{legend_rows}</div>"
-    )
+    # 施設は単一色。番号バッジのサンプルを数個並べる（全て同色）。
     badges = "".join(
         f'<div style="display:flex;align-items:center;margin:4px 0;">'
-        f'<span style="width:{badge_px}px;height:{badge_px}px;border-radius:50%;background:{col};'
+        f'<span style="width:{badge_px}px;height:{badge_px}px;border-radius:50%;background:{facility};'
         "color:#fff;display:flex;align-items:center;justify-content:center;"
         f'font-size:{badge_font_px}px;font-weight:bold;flex-shrink:0;">{i}</span>'
-        f'<span style="margin-left:8px;font-size:13px;color:#111827;">{cat} サンプル</span>'
+        f'<span style="margin-left:8px;font-size:13px;color:#111827;">推進園サンプル {i}</span>'
         "</div>"
-        for i, (cat, col) in enumerate(fac.items(), start=1)
+        for i in range(1, 4)
     )
     # 円の塗りは rgba で透明度を反映する
     r, g, b = theme.hex_to_rgb(circle)
@@ -175,7 +156,6 @@ def _preview_html(values: dict) -> str:
         '<div style="border:1px solid #E5E7EB;border-radius:8px;padding:16px;">'
         f"{band_bar}"
         '<div style="display:flex;gap:24px;flex-wrap:wrap;align-items:flex-start;">'
-        f'<div>{legend}</div>'
         f'<div><div style="font-size:12px;color:#6B7280;margin-bottom:4px;">施設リスト</div>{badges}</div>'
         f'<div><div style="font-size:12px;color:#6B7280;margin-bottom:4px;">半径円</div>{circle_swatch}</div>'
         "</div></div>"
@@ -186,21 +166,15 @@ def render() -> None:
     """Render the theme-config page."""
     st.header("テーマ設定")
     st.info(
-        "凡例（推進園区分）・半径円・見出し帯の色と、地図の背景・マーカーサイズを調整できます。"
-        "「保存」で config/theme.toml に書き込み、地図とダウンロードPNGの両方へ反映されます。"
+        "施設の色（単一色）・半径円・見出し帯の色と、地図の背景・マーカーサイズを調整できます。"
+        "「保存」で config/theme.toml に書き込み、地図・ダウンロードPNG・pptx へ反映されます。"
     )
 
     _init_state()
-    categories = list(theme.get_theme()["facility_colors"].keys())
 
-    st.subheader("推進園区分の色（凡例・マーカー）")
-    fac_cols = st.columns(max(len(categories), 1))
-    for col, category in zip(fac_cols, categories):
-        with col:
-            st.color_picker(category, key=_facility_key(category))
-    st.color_picker(
-        "区分フォールバック（想定外/未設定）", key="cfg_facility_fallback"
-    )
+    st.subheader("施設の色")
+    st.caption("推進園マーカー（番号付きの円）・施設リストバッジの色。区分による色分けは廃止しています。")
+    st.color_picker("施設の色", key="cfg_facility_color")
 
     st.subheader("半径円")
     c1, c2 = st.columns(2)
@@ -258,7 +232,7 @@ def render() -> None:
         key=_STORE_MARKER_SIZE_KEY,
     )
 
-    values = _collect_values(categories)
+    values = _collect_values()
 
     bm = basemaps.get_basemap(values["basemap"])
     st.caption(f"選択中の背景: {bm['provider']} / {bm['label']}　｜　帰属表示: {bm['attribution']}")

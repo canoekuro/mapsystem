@@ -1,9 +1,10 @@
 """
 配色テーマの単一の入口（SPEC §6.1.2 / §8.3）。
 
-地図（folium）・ダウンロードPNG・静的PNG・施設リスト・凡例で共有する唯一の色定義。
-値は ``config/theme.toml`` の ``[theme]`` / ``[theme.facility_colors]`` から読み込み、
-未設定・不正時は組み込み既定（``_DEFAULTS``）へフォールバックする。
+地図（folium）・ダウンロードPNG・静的PNG・施設リストで共有する唯一の色定義。
+値は ``config/theme.toml`` の ``[theme]`` から読み込み、未設定・不正時は組み込み既定
+（``_DEFAULTS``）へフォールバックする。推進園の区分色分けは廃止済みで、施設は単一色
+（``facility_color``）で描画する（issue 202607161811 / 202607221414）。
 「テーマ設定」ページ（views/config_page.py）がこのファイルを書き換えて配色を調整する。
 
 **描画時に解決すること**が肝で、各アクセサは import 時の定数ではなく関数として提供する
@@ -11,7 +12,7 @@
 
 Public API
 ----------
-facility_colors() / facility_color(cat) / facility_color_rgb(cat)
+facility_color(cat) / facility_color_rgb(cat)
 circle_color() / circle_color_rgb() / circle_fill_opacity()
 band_color() / band_color_rgb()
 basemap_id()
@@ -31,12 +32,6 @@ _THEME_CONFIG_PATH = "config/theme.toml"
 
 # 組み込み既定（config/theme.toml と同値）。ファイル未設定・キー欠損時のフォールバック。
 _DEFAULTS: dict = {
-    "facility_colors": {
-        "認可保育所": "#2A78D6",   # 青
-        "認定こども園": "#EB6834",  # 橙
-        "幼稚園": "#4A3AA7",       # 紫
-    },
-    "facility_fallback": "#6B7280",   # 灰
     # 推進園マーカー/施設リストバッジの単一色（区分による色分けは廃止, issue 202607161811）。
     "facility_color": "#7030A0",
     "circle_color": "#7C3AED",
@@ -78,7 +73,6 @@ _MARKER_SIZE_MAX = 200
 
 # スカラー（色/小数）のキー順。TOML 手組みと設定ページの両方で使う。
 _SCALAR_KEYS = (
-    "facility_fallback",
     "facility_color",
     "circle_color",
     "circle_fill_opacity",
@@ -97,7 +91,7 @@ def default_theme() -> dict:
 
 
 def _load_from_file() -> dict:
-    """config/theme.toml の [theme]（+ facility_colors）と [map] を読む。未存在時は空。"""
+    """config/theme.toml の [theme] と [map] を読む。未存在時は空。"""
     try:
         with open(_THEME_CONFIG_PATH, "rb") as f:
             data = tomllib.load(f)
@@ -119,14 +113,9 @@ def _load_from_file() -> dict:
 
 
 def _merge(base: dict, extra: dict) -> None:
-    """extra の有効な値を base へ上書きマージ（facility_colors はキー単位で合成）。"""
+    """extra の有効な値を base へ上書きマージする。"""
     for key, value in extra.items():
-        if key == "facility_colors" and isinstance(value, dict):
-            fc = base.setdefault("facility_colors", {})
-            for cat, col in value.items():
-                if isinstance(col, str) and col:
-                    fc[cat] = col
-        elif key == "circle_fill_opacity":
+        if key == "circle_fill_opacity":
             if isinstance(value, (int, float)):
                 base[key] = float(value)
         elif key == "basemap":
@@ -184,11 +173,6 @@ def hex_to_rgb(hex_color: str) -> tuple[int, int, int]:
     """``"#RRGGBB"`` を ``(R, G, B)`` タプルへ変換する。"""
     h = hex_color.lstrip("#")
     return int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
-
-
-def facility_colors() -> dict[str, str]:
-    """推進園区分 -> 色 の辞書（定義順は凡例の表示順）。"""
-    return get_theme()["facility_colors"]
 
 
 def facility_color(category: str | None = None) -> str:
@@ -285,16 +269,10 @@ def theme_toml_text(values: dict) -> str:
         "# 「テーマ設定」ページで生成。値は 16進カラー（circle_fill_opacity のみ 0.0–1.0）。",
         "",
         "[theme]",
-        f'facility_fallback   = "{theme["facility_fallback"]}"',
+        f'facility_color      = "{theme["facility_color"]}"',
         f'circle_color        = "{theme["circle_color"]}"',
         f"circle_fill_opacity = {theme['circle_fill_opacity']}",
         f'band_color          = "{theme["band_color"]}"',
-        "",
-        "[theme.facility_colors]",
-    ]
-    for cat, col in theme["facility_colors"].items():
-        lines.append(f'"{cat}" = "{col}"')
-    lines += [
         "",
         "# 地図の背景（ベースマップ）。id は lib/basemaps.py の BASEMAPS を参照。",
         "[map]",
