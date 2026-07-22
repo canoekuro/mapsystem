@@ -15,30 +15,43 @@ from streamlit_folium import st_folium
 from lib.colors import band_color, facility_color, map_height, map_width
 from lib.data import (
     load_filtered,
+    load_stores,
     stores_for_company,
     filter_facilities,
     filter_company,
     prefectures_for_company,
     stores_for_company_prefectures,
-    store_count_for_company_prefectures,
     store_nursery_counts,
 )
 from lib.map_builder import build_map
-from lib.zip_builder import build_png_zip
+from lib.pptx_builder import build_store_pptx, load_template_bytes
+from lib.static_map import render_static_map
 
 logger = logging.getLogger(__name__)
 
 # ページ遷移（st.navigation）を跨いで保持する入力ウィジェットの session_state キー。
-# 企業名称・取得半径・都道府県（表示行）・小売店名称・都道府県（一括DL）。
-_INPUT_KEYS = ("mp_company", "mp_fetch_radius", "mp_pref", "mp_store", "mp_prefs")
+# 企業名称・取得半径・都道府県（表示行）・小売店名称。
+_INPUT_KEYS = ("mp_company", "mp_fetch_radius", "mp_pref", "mp_store")
+
+_PPTX_MIME = (
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+)
 
 
-# df is excluded from the cache key (hash_funcs returns None): it is uniquely
-# determined by the already-fetched (company, radius), which are part of the key.
-@st.cache_data(show_spinner="画像を生成中...", hash_funcs={pd.DataFrame: lambda _df: None})
-def _company_image_zip(df: pd.DataFrame, company: str, prefectures: tuple, radius: float) -> bytes:
-    names = stores_for_company_prefectures(df, company, list(prefectures))
-    return build_png_zip(df, names, radius)
+# df is excluded from the cache key (hash_funcs returns None): the store's map is
+# uniquely determined by (store, radius) within the already-fetched df.
+@st.cache_data(show_spinner="地図を生成中...", hash_funcs={pd.DataFrame: lambda _df: None})
+def _store_map_png(df: pd.DataFrame, store: str, radius: float) -> bytes:
+    srow = df[df["店舗名称"] == store].iloc[0]
+    fac = filter_facilities(df, store, radius)
+    return render_static_map(srow, fac, radius)
+
+
+# 商談用資料 / 店舗POP の pptx。地図PNG（_store_map_png）を使い回し、テンプレ種別ごとに
+# プレースホルダーへの貼り付けだけを行う（サーバ側の地図生成は店舗ごとに1回）。
+@st.cache_data(show_spinner="資料を生成中...")
+def _store_pptx(map_png: bytes, kind: str) -> bytes:
+    return build_store_pptx(load_template_bytes(kind), map_png)
 
 
 def _header_html(store: str, radius: float) -> str:
@@ -247,7 +260,10 @@ def render(companies: list[str]) -> None:
 
     # データ取得: 企業 + 取得半径で Databricks 側を絞り込んで取得し、session_state に保存。
     if fetch_clicked:
+        # 店舗×推進園（距離で絞る）と 小売店マスタ（距離で絞らない）の2つを取得する。
+        # 前者はマップ・施設リスト、後者は選択肢・下部集計表の土台（issue 202607221128）。
         st.session_state["loaded_df"] = load_filtered(company, fetch_radius)
+        st.session_state["loaded_stores_df"] = load_stores(company)
         st.session_state["loaded_company"] = company
         st.session_state["loaded_fetch_radius"] = fetch_radius
 
@@ -258,17 +274,18 @@ def render(companies: list[str]) -> None:
         return
 
     df = st.session_state["loaded_df"]
+    stores_df = st.session_state["loaded_stores_df"]
     loaded_company = st.session_state["loaded_company"]
     loaded_fetch_radius = st.session_state["loaded_fetch_radius"]
 
     # --- 取得件数サマリ（取得後は常時表示）---
-    # 0件のとき選択肢が空になるだけで取得失敗と区別できない問題を避けるため、
-    # 選択肢になる店舗数を明示する（取得済みDFから都度算出）。
-    n_stores = df["店舗名称"].nunique() if len(df) else 0
+    # 選択肢になる店舗数は小売店マスタ（距離非依存）から数える。圏内推進園0件の店舗も
+    # 候補・集計表に残るため、ここは取得半径に依存しない（issue 202607221128）。
+    n_stores = stores_df["店舗名称"].nunique() if len(stores_df) else 0
     if n_stores == 0:
         st.warning(
-            f"取得店舗数: 0件 — {loaded_company} / 半径{loaded_fetch_radius}km に"
-            "該当するデータがありませんでした（取得処理は成功しています）"
+            f"取得店舗数: 0件 — {loaded_company} の小売店データが取得できませんでした"
+            "（取得処理は成功しています）"
         )
     else:
         st.success(f"取得店舗数: {n_stores:,}件")
@@ -284,84 +301,39 @@ def render(companies: list[str]) -> None:
             "「データ取得」を押すと再取得します。"
         )
 
+    # 小売店マスタが空（企業に店舗が無い）ならマップは表示せず 0 件アラートのみ
+    # （issue 202607221128: 「データが無い場合はマップを表示せず0件をアラート」）。
+    if n_stores == 0:
+        _data_source_caption()
+        return
+
     # --- データダウンロード（expander）: 小売店選択より上に配置 ---
-    # 取得済みDF全体（= 取得半径以内）を対象に、取得半径で出力する。
+    # 取得済みDF全体（= 企業全体・取得半径以内）を対象に出力する。都道府県での絞り込みは
+    # 廃止した（issue 202607221128）。
     company = loaded_company
     radius = loaded_fetch_radius
     with st.expander("データダウンロード", expanded=False):
-        # 表示順: ローデータダウンロード → 都道府県で絞り込み → 画像をダウンロード。
-        # データ/画像は都道府県の選択値を使うため、コンテナで表示位置を固定しつつ
-        # 先に都道府県を読み取る。
-        data_box = st.container()
-        pref_box = st.container()
-        image_box = st.container()
-
-        with pref_box:
-            pref_opts = prefectures_for_company(df, company)
-            # 保持値のうち現在の候補に無いものを除外（options 変化時の例外回避）。
-            if "mp_prefs" in st.session_state:
-                st.session_state["mp_prefs"] = [
-                    p for p in st.session_state["mp_prefs"] if p in pref_opts
-                ]
-            prefs = st.multiselect(
-                "都道府県で絞り込み", pref_opts, default=[],
-                placeholder="都道府県を選択", key="mp_prefs",
-            )
-            if prefs:
-                count = store_count_for_company_prefectures(df, company, prefs)
-                st.caption(f"選択中の都道府県: {count}件の店舗")
-
-        # ファイル名に都道府県を付加
-        pref_label = "_".join(sorted(prefs)) if prefs else ""
-        csv_filename = (
-            f"{company}_{pref_label}_{radius}km.csv"
-            if pref_label
-            else f"{company}_{radius}km.csv"
+        # ローデータダウンロード（企業全体・取得半径以内を単一CSV cp932 で直接生成）
+        _csv = (
+            filter_company(df, company, radius)
+            .to_csv(index=False)
+            .encode("cp932", errors="replace")
         )
-        zip_filename = (
-            f"{company}_{pref_label}_{radius}km.zip"
-            if pref_label
-            else f"{company}_{radius}km.zip"
+        st.download_button(
+            "ローデータダウンロード",
+            data=_csv,
+            file_name=f"{company}_{radius}km.csv",
+            mime="text/csv",
+            use_container_width=True,
         )
-
-        # ローデータダウンロード（単一CSV cp932・直接生成、都道府県選択時は絞込）
-        with data_box:
-            _csv = (
-                filter_company(df, company, radius, prefectures=prefs if prefs else None)
-                .to_csv(index=False)
-                .encode("cp932", errors="replace")
-            )
-            st.download_button(
-                "ローデータダウンロード",
-                data=_csv,
-                file_name=csv_filename,
-                mime="text/csv",
-                use_container_width=True,
-            )
-
-        # 画像をダウンロード（都道府県で絞込 → 1ボタンDL）
-        with image_box:
-            img_disabled = not prefs
-            img_data = (
-                _company_image_zip(df, company, tuple(sorted(prefs)), radius)
-                if not img_disabled
-                else b""
-            )
-            st.download_button(
-                "画像をダウンロード",
-                data=img_data,
-                file_name=zip_filename,
-                mime="application/zip",
-                disabled=img_disabled,
-                use_container_width=True,
-            )
 
     # --- 表示行（取得後のみ）: 都道府県 + 小売店 ---
     # 絞り込み順は 企業 → 取得半径 →（データ取得）→ 都道府県 → 小売店名称。
+    # 選択肢は小売店マスタ（stores_df）から生成し、圏内推進園0件の店舗も候補に含める。
     # 都道府県は単一選択・任意で、未選択なら企業内の全店舗を候補にする。
     pref_col, store_col = st.columns([1, 2])
     with pref_col:
-        pref_opts_disp = prefectures_for_company(df, loaded_company)
+        pref_opts_disp = prefectures_for_company(stores_df, loaded_company)
         # 保持値が現在の候補に無ければクリア（options 変化時の例外回避）。
         if st.session_state.get("mp_pref") not in pref_opts_disp:
             st.session_state.pop("mp_pref", None)
@@ -372,9 +344,9 @@ def render(companies: list[str]) -> None:
         )
     with store_col:
         store_opts = (
-            stores_for_company_prefectures(df, loaded_company, [pref])
+            stores_for_company_prefectures(stores_df, loaded_company, [pref])
             if pref
-            else stores_for_company(df, loaded_company)
+            else stores_for_company(stores_df, loaded_company)
         )
         # 都道府県変更等で保持した店舗が候補外になった場合はクリア。
         if st.session_state.get("mp_store") not in store_opts:
@@ -389,10 +361,18 @@ def render(companies: list[str]) -> None:
 
     # --- 地図＋施設リスト ---
     # 表示半径は廃止し、取得半径（loaded_fetch_radius）をそのまま表示に用いる。
+    store_rows = df[df["店舗名称"] == store] if store is not None else df.iloc[0:0]
     if store is None:
         st.info("小売店名称を選択してください")
+    elif store_rows.empty:
+        # 小売店マスタには在るが、取得半径圏内の推進園が0件で店舗×推進園DFに行が無い。
+        # 店舗座標が取れずマップを描けないため、0件アラートのみ表示（issue 202607221128）。
+        st.markdown(_header_html(store, loaded_fetch_radius), unsafe_allow_html=True)
+        st.warning(
+            f"半径{loaded_fetch_radius}km圏内に推進園が0件です（マップは表示されません）"
+        )
     else:
-        srow = df[df["店舗名称"] == store].iloc[0]
+        srow = store_rows.iloc[0]
         fac = filter_facilities(df, store, loaded_fetch_radius)
 
         # マップを誤って操作した場合に初期表示へ戻すリセット（紫帯の上に配置）。
@@ -420,6 +400,26 @@ def render(companies: list[str]) -> None:
                 height=map_height(),
                 key=f"map_{store}_{loaded_fetch_radius}_{nonce}",
             )
+            # 商談用資料 / 店舗POP の pptx ダウンロード（選択中の1店舗・地図画像を貼付）。
+            # 地図PNGは1回だけ生成し、両テンプレで使い回す（issue 202607221128）。
+            map_png = _store_map_png(df, store, loaded_fetch_radius)
+            dl_shoudan, dl_pop = st.columns(2)
+            with dl_shoudan:
+                st.download_button(
+                    "商談用資料ダウンロード",
+                    data=_store_pptx(map_png, "shoudan"),
+                    file_name=f"{store}_商談用資料.pptx",
+                    mime=_PPTX_MIME,
+                    use_container_width=True,
+                )
+            with dl_pop:
+                st.download_button(
+                    "店舗POPダウンロード",
+                    data=_store_pptx(map_png, "pop"),
+                    file_name=f"{store}_店舗POP.pptx",
+                    mime=_PPTX_MIME,
+                    use_container_width=True,
+                )
         with col_list:
             st.markdown(_facility_list_html(fac), unsafe_allow_html=True)
             # 施設リストの下に出荷実績（当年実績ケース数・前年比）のダミー枠を表示（part6）。
@@ -429,8 +429,9 @@ def render(companies: list[str]) -> None:
     _data_source_caption()
 
     # --- 店舗別 推進園数サマリ（出典表示の下, part1）---
-    # 取得済み DF（企業一致 & 距離km<=取得半径）を pandas 集計。企業全体の全店舗が対象。
-    summary = store_nursery_counts(df)
+    # 小売店マスタ（企業全体の全店舗）に、取得半径圏内の推進園数を left join。圏内0件の
+    # 店舗も 推進園数=0 で残る（issue 202607221128）。
+    summary = store_nursery_counts(stores_df, df)
     st.markdown("##### 店舗別 推進園数")
     st.dataframe(summary, use_container_width=True, hide_index=True)
     _summary_csv = summary.to_csv(index=False).encode("cp932", errors="replace")

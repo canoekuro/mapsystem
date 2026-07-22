@@ -3,6 +3,7 @@ pandas>=2,<3
 folium>=0.16
 streamlit-folium>=0.20
 Pillow>=10,<11
+python-pptx>=0.6,<2
 requests>=2,<3
 databricks-connect>=14.0
 databricks-sdk>=0.20

@@ -4,6 +4,20 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+### 2026-07-22
+
+- feat: 小売店マスタの分離とマップpptx出力（issue 202607221128）。
+  - 小売店マスタ（`[databricks] store_table`）を取得半径に依存せず取得し、小売店名称・都道府県の
+    選択肢と店舗別推進園数の集計表の土台に使用。圏内推進園0件の店舗も候補・集計表に残り、
+    推進園数は圏内データを left join して 0 埋め。小売店0件時はマップ非表示で0件アラート。
+  - 「画像をダウンロード」（都道府県選択→店舗別PNGのZIP）を廃止し、選択中1店舗の地図画像を
+    PowerPointテンプレートの画像プレースホルダーへ貼付した pptx を出力する「商談用資料
+    ダウンロード」「店舗POPダウンロード」を追加（`lib/pptx_builder.py`、`python-pptx`）。
+    テンプレは Volume（`[pptx] template_dir`）から取得し失敗時は `images/template.pptx`。
+  - データダウンロード expander から都道府県での絞り込みを撤去（CSVは企業全体対象）。
+  - `lib/data.py`（`load_stores` / `store_nursery_counts` 2引数化）、`views/main_page.py`、
+    `requirements.txt`、`SPEC.md` を更新。[詳細](docs/history/20260722-031141-issue-store-table-pptx-plan.md)
+
 ### 2026-07-17
 
 - change: 周辺マップ概要の施設リストを image2.png の指摘に合わせて微調整（issue 20260717）。
