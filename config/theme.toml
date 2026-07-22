@@ -40,4 +40,4 @@ map_detail_zoom = 0
 # 店舗マーカー（画像アイコン）は単一の相対サイズ（％）。
 # いずれもテーマ設定ページで変更でき、対話地図とダウンロードPNGの両方に反映される。
 facility_marker_sizes = [150, 120, 100, 90, 80, 50]
-store_marker_size     = 100
+store_marker_size     = 200
