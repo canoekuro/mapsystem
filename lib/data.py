@@ -72,13 +72,15 @@ def load_company_names() -> list[str]:
     """
     Lightweight startup query: distinct 企業名称 only.
 
-    Avoids loading the full table — only the (few hundred) distinct company
-    names are pulled, so the app starts fast and queries on demand.
+    企業名称の候補は小売店マスタ（``store_table``）から取得する（issue 202607221245）。
+    店舗×推進園テーブルは圏内推進園のある企業しか含まないのに対し、小売店マスタは
+    企業の全店舗を持つため、候補としてはこちらが正しい。全件はロードせず、DISTINCT の
+    企業名称（数百件）のみを取得する。
     """
     mapping = _load_column_mapping()
     company_col = mapping.get("企業名称", "企業名称")
 
-    table_name, spark = _table_and_spark()
+    table_name, spark = _table_and_spark(key="store_table")
     rows = spark.table(table_name).select(company_col).distinct().toPandas()
     return sorted(rows[company_col].dropna().astype(str).tolist())
 

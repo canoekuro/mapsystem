@@ -75,53 +75,53 @@ def load_template_bytes(kind: str) -> bytes:
         return f.read()
 
 
-def _find_picture_placeholder(slide):
-    """Return the picture placeholder shape on *slide*, or None.
+def _target_box(slide, prs):
+    """画像を収める矩形 (left, top, width, height) を返し、対象プレースホルダーを削除する。
 
-    python-pptx は画像プレースホルダー（PICTURE / CLIP_ART）を ``insert_picture`` を持つ
-    ``PicturePlaceholder`` として公開する。``insert_picture`` 属性の有無で判定する。
+    画像プレースホルダー（``insert_picture`` 可）を最優先し、無ければ最初のプレースホルダー、
+    それも無ければスライド全面を対象にする。プレースホルダーは空枠が残らないよう削除する。
     """
+    picture_ph = None
     for ph in slide.placeholders:
         if hasattr(ph, "insert_picture"):
-            return ph
-    return None
+            picture_ph = ph
+            break
+    target = picture_ph or (slide.placeholders[0] if len(slide.placeholders) else None)
+    if target is not None:
+        box = (target.left, target.top, target.width, target.height)
+        target._element.getparent().remove(target._element)
+        return box
+    return (0, 0, prs.slide_width, prs.slide_height)
 
 
 def build_store_pptx(template_bytes: bytes, map_png_bytes: bytes) -> bytes:
-    """Insert *map_png_bytes* into the template's picture placeholder → pptx bytes.
+    """Place *map_png_bytes* into the template's picture placeholder → pptx bytes.
 
-    テンプレの1枚目スライドにある画像プレースホルダーへ地図PNGを挿入する。
-    ``insert_picture`` が使える画像プレースホルダーがあればそれを優先し、無い場合は
-    プレースホルダーの位置・サイズに ``add_picture`` で貼り付けて元プレースホルダーを
-    削除するフォールバックを用いる（テンプレ構成差異への堅牢性）。
+    地図PNGを 1 枚目スライドの画像プレースホルダー位置へ貼り付ける。プレースホルダーの
+    ``insert_picture`` は画像をプレースホルダーのアスペクト比にクロップしてしまい、対話地図と
+    体裁が合わなくなる（issue 202607221245）。そこで、プレースホルダーの矩形内に **アスペクト比を
+    保ったまま**収まるよう ``add_picture`` で中央配置する（元プレースホルダーは削除）。
     """
+    from PIL import Image  # noqa: PLC0415
     from pptx import Presentation  # noqa: PLC0415
 
     prs = Presentation(io.BytesIO(template_bytes))
     slide = prs.slides[0]
 
-    ph = _find_picture_placeholder(slide)
-    if ph is not None:
-        ph.insert_picture(io.BytesIO(map_png_bytes))
-    else:
-        # フォールバック: 最初のプレースホルダー位置に画像を貼り、元枠は削除する。
-        placeholders = list(slide.placeholders)
-        if placeholders:
-            target = placeholders[0]
-            left, top, width, height = (
-                target.left,
-                target.top,
-                target.width,
-                target.height,
-            )
-            target._element.getparent().remove(target._element)
-        else:
-            # プレースホルダーが無ければスライド全面に貼る。
-            left, top = 0, 0
-            width, height = prs.slide_width, prs.slide_height
-        slide.shapes.add_picture(
-            io.BytesIO(map_png_bytes), left, top, width=width, height=height
-        )
+    box_left, box_top, box_w, box_h = _target_box(slide, prs)
+
+    # 画像のアスペクト比を保って矩形にフィット（レターボックス）し、矩形中央へ配置する。
+    with Image.open(io.BytesIO(map_png_bytes)) as im:
+        img_w, img_h = im.size
+    scale = min(box_w / img_w, box_h / img_h)
+    draw_w = int(round(img_w * scale))
+    draw_h = int(round(img_h * scale))
+    left = int(box_left + (box_w - draw_w) / 2)
+    top = int(box_top + (box_h - draw_h) / 2)
+
+    slide.shapes.add_picture(
+        io.BytesIO(map_png_bytes), left, top, width=draw_w, height=draw_h
+    )
 
     out = io.BytesIO()
     prs.save(out)
