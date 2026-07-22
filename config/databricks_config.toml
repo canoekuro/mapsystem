@@ -21,6 +21,13 @@ pop_template = "to_pop.pptx"
 # Databricks にアクセスできないときのフォールバック（リポジトリ同梱）
 local_fallback = "images/template.pptx"
 
-# テキストプレースホルダーに入れる定型文（issue 202607221450）。
-# {store} が選択中の小売店名称に置換される。商談用資料・店舗POP で共通。
+# テキストプレースホルダーに入れる定型文（issue 202607221450 / 202607221705）。
+# 商談用資料・店舗POP で共通。テーマ設定ページからも編集できる。
+# store_caption_format:       {store} が選択中の小売店名称に置換される。
+# map_status_caption_format:  {year}/{month}/{day} がデータ最終更新日（JST）に置換される。
+# activity_caption_format:    {year} がデータ最終更新年（JST）に置換される。
+# {year}/{month}/{day} はデータ更新日時が取得できないとき（Databricks 未接続・
+# DESCRIBE HISTORY 保持期間超過など）は該当キャプションを挿入しない。
 store_caption_format = "{store} 周辺マップ"
+map_status_caption_format = "※地図、店舗状況は{year}年{month}月{day}日時点"
+activity_caption_format = "※地図中の園は{year}年に啓発活動を実施いただいた園となります"

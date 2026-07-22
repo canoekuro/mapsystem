@@ -16,6 +16,7 @@ from lib.colors import band_color, facility_color, map_height, map_width
 from lib.data import (
     load_filtered,
     load_stores,
+    load_table_last_updated_ts,
     stores_for_company,
     filter_facilities,
     prefectures_for_company,
@@ -23,7 +24,12 @@ from lib.data import (
     store_nursery_counts,
 )
 from lib.map_builder import build_map
-from lib.pptx_builder import build_store_pptx, load_caption, load_template_bytes
+from lib.pptx_builder import (
+    build_store_pptx,
+    load_caption,
+    load_dated_caption,
+    load_template_bytes,
+)
 from lib.static_map import render_static_map
 
 logger = logging.getLogger(__name__)
@@ -50,11 +56,37 @@ def _store_map_png(df: pd.DataFrame, store: str, radius: float, width: int, heig
 
 # 商談用資料 / 店舗POP の pptx。地図PNG（_store_map_png）を使い回し、テンプレ種別ごとに
 # プレースホルダーへの貼り付けだけを行う（サーバ側の地図生成は店舗ごとに1回）。
-# store は画像プレースホルダーに加えテキストプレースホルダーへの定型文差し込み（issue 202607221450）
-# に使うほか、キャッシュキーにも含める（同一PNG+kindでも店舗が変われば別デッキになる）。
+# captions はテキストプレースホルダーへ入れる定型文（小売店名称・地図/店舗状況の時点・啓発活動年,
+# issue 202607221450 / 202607221705）。呼び出し側で組み立てた tuple をそのままキャッシュキーに
+# 含めるため、店舗やデータ更新日時が変わればデッキも作り直される。
 @st.cache_data(show_spinner="資料を生成中...")
-def _store_pptx(map_png: bytes, kind: str, store: str | None) -> bytes:
-    return build_store_pptx(load_template_bytes(kind), map_png, load_caption(store))
+def _store_pptx(map_png: bytes, kind: str, captions: tuple[str, ...]) -> bytes:
+    return build_store_pptx(load_template_bytes(kind), map_png, list(captions))
+
+
+def _safe_last_updated_ts():
+    """データ最終更新の JST Timestamp を返す（取得失敗時は None）。
+
+    Databricks 未接続・参照不可でも pptx 生成を止めないため、例外は握りつぶして None を返す。
+    """
+    try:
+        return load_table_last_updated_ts()
+    except Exception as e:  # noqa: BLE001
+        logger.warning("データ更新日時の取得に失敗: %s", e)
+        return None
+
+
+def _store_captions(store: str | None) -> tuple[str, ...]:
+    """テキストプレースホルダー用の定型文3種を idx 昇順に対応する順で組み立てる。
+
+    データ更新日時が取れないとき、日付入りの2種は空文字となり該当枠へは挿入されない。
+    """
+    ts = _safe_last_updated_ts()
+    return (
+        load_caption(store),
+        load_dated_caption("map_status_caption_format", ts),
+        load_dated_caption("activity_caption_format", ts),
+    )
 
 
 def _header_html(store: str, radius: float) -> str:
@@ -435,9 +467,11 @@ def _render_sidebar_downloads(
         pptx_disabled = map_png is None
         if pptx_disabled:
             st.caption("小売店を選択すると商談用資料・店舗POPを出力できます")
+        # 定型文（データ更新日時を含む）は両テンプレ共通。ここで一度だけ組み立てる。
+        captions = () if pptx_disabled else _store_captions(store)
         st.download_button(
             "商談用資料ダウンロード",
-            data=_store_pptx(map_png, "shoudan", store) if not pptx_disabled else b"",
+            data=_store_pptx(map_png, "shoudan", captions) if not pptx_disabled else b"",
             file_name=f"{store}_商談用資料.pptx",
             mime=_PPTX_MIME,
             disabled=pptx_disabled,
@@ -445,7 +479,7 @@ def _render_sidebar_downloads(
         )
         st.download_button(
             "店舗POPダウンロード",
-            data=_store_pptx(map_png, "pop", store) if not pptx_disabled else b"",
+            data=_store_pptx(map_png, "pop", captions) if not pptx_disabled else b"",
             file_name=f"{store}_店舗POP.pptx",
             mime=_PPTX_MIME,
             disabled=pptx_disabled,

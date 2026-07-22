@@ -11,14 +11,18 @@
 Functions
 ---------
 load_template_bytes(kind)               -- Volume からテンプレ取得（失敗時ローカルfallback）
+load_caption_formats()                  -- [pptx] の定型文3種（file <- 上書き <- 既定）を返す
 load_caption(store)                     -- config の定型文に小売店名称を差し込んだ文字列を返す
-build_store_pptx(template_bytes, png, caption)
+load_dated_caption(fmt_key, ts)         -- データ更新日時 ts を定型文へ差し込んだ文字列を返す
+save_caption_formats(values)            -- 定型文を databricks_config.toml へ保存（読取専用時は例外）
+build_store_pptx(template_bytes, png, caption_texts)
                                         -- 画像プレースホルダーに地図PNGを挿入し、テキスト
-                                           プレースホルダーへ caption を入れて pptx bytes を返す
+                                           プレースホルダーへ各 caption を入れて pptx bytes を返す
 """
 
 import io
 import logging
+import re
 import tomllib
 
 logger = logging.getLogger(__name__)
@@ -30,6 +34,19 @@ _TEMPLATE_KEY = {
     "shoudan": "shoudan_template",
     "pop": "pop_template",
 }
+
+# テキストプレースホルダーへ入れる定型文（キー -> 既定文）。テンプレのテキストプレースホルダーを
+# idx 昇順に並べ、この順で対応付ける（issue 202607221450 / 202607221705）。
+# {store} は小売店名称、{year}/{month}/{day} はデータ最終更新日（JST）に置換する。
+_CAPTION_DEFAULTS: dict[str, str] = {
+    "store_caption_format": "{store}",
+    "map_status_caption_format": "※地図、店舗状況は{year}年{month}月{day}日時点",
+    "activity_caption_format": "※地図中の園は{year}年に啓発活動を実施いただいた園となります",
+}
+
+# 読取専用FS（Databricks Apps 等）でのプロセス内オーバーライド（lib/colors.py と同型）。
+# save 失敗時に apply_caption_overrides() で差し込み、その場の生成に即時反映させる。
+_caption_overrides: dict[str, str] = {}
 
 
 def _load_pptx_config() -> dict:
@@ -78,20 +95,109 @@ def load_template_bytes(kind: str) -> bytes:
         return f.read()
 
 
+def default_caption_formats() -> dict[str, str]:
+    """組み込み既定の定型文3種の複製を返す（テーマ設定ページの「既定に戻す」用）。"""
+    return dict(_CAPTION_DEFAULTS)
+
+
+def load_caption_formats() -> dict[str, str]:
+    """テキストプレースホルダー定型文3種を返す（既定 <- config ファイル <- 上書き）。
+
+    値の出所は ``config/databricks_config.toml`` の ``[pptx]`` と、読取専用FS 用の
+    プロセス内オーバーライド。未設定・空文字のキーは既定（``_CAPTION_DEFAULTS``）を使う。
+    """
+    config = _load_pptx_config()
+    formats: dict[str, str] = {}
+    for key, default in _CAPTION_DEFAULTS.items():
+        value = _caption_overrides.get(key) or config.get(key) or default
+        formats[key] = value
+    return formats
+
+
+def apply_caption_overrides(values: dict) -> None:
+    """定型文のプロセス内オーバーライドを差し込む（読取専用FS での即時反映用）。"""
+    for key in _CAPTION_DEFAULTS:
+        if key in values and isinstance(values[key], str):
+            _caption_overrides[key] = values[key]
+
+
 def load_caption(store: str | None) -> str:
-    """選択中の小売店名称 *store* を config の定型文に差し込んだキャプション文字列を返す。
+    """選択中の小売店名称 *store* を定型文に差し込んだキャプション文字列を返す。
 
     定型文は ``[pptx] store_caption_format``（既定 ``"{store}"``）。``{store}`` が
     小売店名称に置換される。*store* が空/None のときは空文字を返す（テキスト挿入なし）。
     """
     if not store:
         return ""
-    fmt = _load_pptx_config().get("store_caption_format", "{store}")
+    fmt = load_caption_formats()["store_caption_format"]
     try:
         return fmt.format(store=store)
     except (KeyError, IndexError) as e:  # noqa: PERF203
         logger.warning("store_caption_format の書式が不正です（%r）: %s", fmt, e)
         return store
+
+
+def load_dated_caption(fmt_key: str, ts) -> str:
+    """データ更新日時 *ts* を ``[pptx] {fmt_key}`` の定型文へ差し込んで返す。
+
+    *ts* は年月日を持つオブジェクト（``pd.Timestamp``/``datetime``）または None。
+    ``{year}/{month}/{day}`` を JST の年月日（ゼロ埋めしない）に置換する。*ts* が None
+    のときは空文字を返す（日時未取得ならキャプションを挿入しない）。書式不正時も空文字。
+    """
+    if ts is None:
+        return ""
+    fmt = load_caption_formats().get(fmt_key, "")
+    if not fmt:
+        return ""
+    try:
+        return fmt.format(year=ts.year, month=ts.month, day=ts.day)
+    except (KeyError, IndexError, ValueError) as e:  # noqa: PERF203
+        logger.warning("%s の書式が不正です（%r）: %s", fmt_key, fmt, e)
+        return ""
+
+
+def _escape_toml_basic(value: str) -> str:
+    """TOML 基本文字列用に ``\\`` と ``"`` をエスケープする。"""
+    return value.replace("\\", "\\\\").replace('"', '\\"')
+
+
+def patched_config_text(values: dict) -> str:
+    """現 ``databricks_config.toml`` の定型文キーを *values* で置換した全文を返す。
+
+    ``[pptx]`` セクション以外は保持し、対象キー行のみ差し替える（無ければ ``[pptx]`` 直下へ
+    追記）。他セクションやコメントを壊さずに保存・ダウンロードするための最小パッチ。
+    """
+    try:
+        with open(_CONFIG_PATH, encoding="utf-8") as f:
+            text = f.read()
+    except FileNotFoundError:
+        text = "[pptx]\n"
+
+    for key in _CAPTION_DEFAULTS:
+        if key not in values or not isinstance(values[key], str):
+            continue
+        line = f'{key} = "{_escape_toml_basic(values[key])}"'
+        pattern = re.compile(rf"^{re.escape(key)}\s*=.*$", re.MULTILINE)
+        if pattern.search(text):
+            text = pattern.sub(line, text, count=1)
+        elif re.search(r"^\[pptx\]", text, re.MULTILINE):
+            text = re.sub(
+                r"(^\[pptx\][^\n]*\n)", rf"\1{line}\n", text, count=1, flags=re.MULTILINE
+            )
+        else:
+            text = text.rstrip("\n") + f"\n\n[pptx]\n{line}\n"
+    return text
+
+
+def save_caption_formats(values: dict) -> str:
+    """定型文 *values* を ``databricks_config.toml`` へ保存し、パスを返す。
+
+    書き込み失敗（読取専用FS 等）時は例外を送出する（呼び出し側で処理）。
+    """
+    text = patched_config_text(values)
+    with open(_CONFIG_PATH, "w", encoding="utf-8") as f:
+        f.write(text)
+    return _CONFIG_PATH
 
 
 def _target_box(slide, prs):
@@ -113,24 +219,37 @@ def _target_box(slide, prs):
     return (0, 0, prs.slide_width, prs.slide_height)
 
 
-def _fill_text_placeholder(slide, text: str) -> None:
-    """スライドのテキストプレースホルダーに *text* を書き込む。
+def _fill_text_placeholders(slide, texts: list[str]) -> None:
+    """スライドのテキストプレースホルダーへ *texts* を idx 昇順で書き込む。
 
     画像プレースホルダー（``insert_picture`` 可）は対象外とし、``text_frame`` を持つ
-    最初のプレースホルダーへ書き込む。テンプレによって idx/名前が異なりうるため idx は
-    ハードコードせず、型/能力ベースで検出する。対象が無ければ warning を出してスキップする。
+    プレースホルダーを idx 昇順（安定順）に並べ、*texts* の先頭から順に対応付ける。idx を
+    ハードコードせず並び順で割り当てるため、テンプレによって idx 値が異なっても機能する。
+    空文字の要素は該当枠を空のまま残す。枠数より *texts* が多い分は warning でスキップする。
     """
-    for ph in slide.placeholders:
-        if hasattr(ph, "insert_picture"):
+    text_phs = [
+        ph
+        for ph in slide.placeholders
+        if not hasattr(ph, "insert_picture") and ph.has_text_frame
+    ]
+    text_phs.sort(key=lambda ph: ph.placeholder_format.idx)
+
+    for i, text in enumerate(texts):
+        if not text:
             continue
-        if ph.has_text_frame:
-            ph.text_frame.text = text
-            return
-    logger.warning("テキストプレースホルダーが見つかりませんでした（caption=%r）", text)
+        if i >= len(text_phs):
+            logger.warning(
+                "テキストプレースホルダーが不足しています（必要 %d, テンプレ %d）: caption=%r",
+                len(texts), len(text_phs), text,
+            )
+            break
+        text_phs[i].text_frame.text = text
 
 
 def build_store_pptx(
-    template_bytes: bytes, map_png_bytes: bytes, caption_text: str | None = None
+    template_bytes: bytes,
+    map_png_bytes: bytes,
+    caption_texts: list[str] | None = None,
 ) -> bytes:
     """Place *map_png_bytes* into the template's picture placeholder → pptx bytes.
 
@@ -139,8 +258,9 @@ def build_store_pptx(
     体裁が合わなくなる（issue 202607221245）。そこで、プレースホルダーの矩形内に **アスペクト比を
     保ったまま**収まるよう ``add_picture`` で中央配置する（元プレースホルダーは削除）。
 
-    *caption_text* が指定された場合は、テキストプレースホルダーへその文字列を書き込む
-    （issue 202607221450）。画像プレースホルダーとは別枠のため画像貼り付けと干渉しない。
+    *caption_texts* が指定された場合は、テキストプレースホルダーへ idx 昇順に各文字列を
+    書き込む（issue 202607221450 / 202607221705）。小売店名称・地図/店舗状況の時点・啓発活動年
+    の3枠を想定。画像プレースホルダーとは別枠のため画像貼り付けと干渉しない。
     """
     from PIL import Image  # noqa: PLC0415
     from pptx import Presentation  # noqa: PLC0415
@@ -148,8 +268,8 @@ def build_store_pptx(
     prs = Presentation(io.BytesIO(template_bytes))
     slide = prs.slides[0]
 
-    if caption_text:
-        _fill_text_placeholder(slide, caption_text)
+    if caption_texts:
+        _fill_text_placeholders(slide, caption_texts)
 
     box_left, box_top, box_w, box_h = _target_box(slide, prs)
 

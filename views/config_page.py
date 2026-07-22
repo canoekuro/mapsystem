@@ -17,8 +17,17 @@ import streamlit as st
 
 from lib import basemaps
 from lib import colors as theme
+from lib import pptx_builder
 
 logger = logging.getLogger(__name__)
+
+# pptx テキストプレースホルダー定型文（config キー -> (session_state キー, ラベル）。
+# idx 昇順のプレースホルダーへ「小売店名称 / 地図・店舗状況の時点 / 啓発活動年」の順で入る。
+_CAPTION_FIELDS = [
+    ("store_caption_format", "cfg_cap_store", "① 小売店名称キャプション（{store}）"),
+    ("map_status_caption_format", "cfg_cap_map_status", "② 地図・店舗状況の時点（{year}/{month}/{day}）"),
+    ("activity_caption_format", "cfg_cap_activity", "③ 啓発活動年（{year}）"),
+]
 
 # (session_state キー, ラベル, テーマキー)
 # 施設の色は区分色分けを廃止し単一色（facility_color）で扱う（issue 202607221414）。
@@ -162,6 +171,60 @@ def _preview_html(values: dict) -> str:
     )
 
 
+def _render_pptx_captions() -> None:
+    """pptx テキストプレースホルダーの定型文を編集・保存するセクション。
+
+    値は ``config/databricks_config.toml`` の ``[pptx]`` を source of truth とし、「保存」で
+    同ファイルを書き換える。読取専用FS（Databricks Apps 等）では警告のうえプロセス内へ適用し、
+    TOML ダウンロードで恒久化を促す（テーマ設定と同じ運用）。
+    """
+    st.divider()
+    st.subheader("pptx定型文")
+    st.caption(
+        "商談用資料・店舗POP のテキストプレースホルダーに入る文言です。"
+        "{store}=小売店名称、{year}/{month}/{day}=データ最終更新日（JST）。"
+        "データ更新日時が取得できないときは日付入りの文言は挿入されません。"
+    )
+
+    current = pptx_builder.load_caption_formats()
+    for cfg_key, skey, label in _CAPTION_FIELDS:
+        st.session_state.setdefault(skey, current[cfg_key])
+        st.text_input(label, key=skey)
+
+    values = {cfg_key: st.session_state[skey] for cfg_key, skey, _label in _CAPTION_FIELDS}
+
+    c1, c2, c3 = st.columns([1, 1, 1])
+    with c1:
+        if st.button("pptx定型文を保存", type="primary", use_container_width=True):
+            try:
+                path = pptx_builder.save_caption_formats(values)
+                st.success(f"保存しました → {path}")
+                st.rerun()
+            except Exception as e:  # noqa: BLE001
+                # 読取専用FS: プロセス内へ適用しつつ DL を促す（テーマ設定と同運用）。
+                logger.warning("databricks_config.toml の保存に失敗: %s", e)
+                pptx_builder.apply_caption_overrides(values)
+                st.warning(
+                    "ファイルへの保存に失敗しました（読取専用の可能性）。"
+                    "今回の生成には反映しました。恒久化するには右の"
+                    "「pptx定型文TOMLをダウンロード」からリポジトリにコミットしてください。"
+                )
+    with c2:
+        st.download_button(
+            "pptx定型文TOMLをダウンロード",
+            data=pptx_builder.patched_config_text(values),
+            file_name="databricks_config.toml",
+            mime="text/plain",
+            use_container_width=True,
+        )
+    with c3:
+        if st.button("pptx定型文を既定に戻す", use_container_width=True):
+            defaults = pptx_builder.default_caption_formats()
+            for cfg_key, skey, _label in _CAPTION_FIELDS:
+                st.session_state[skey] = defaults[cfg_key]
+            st.rerun()
+
+
 def render() -> None:
     """Render the theme-config page."""
     st.header("テーマ設定")
@@ -269,3 +332,5 @@ def render() -> None:
         if st.button("既定に戻す", use_container_width=True):
             _reset_to_default()
             st.rerun()
+
+    _render_pptx_captions()
