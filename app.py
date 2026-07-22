@@ -59,25 +59,8 @@ def _config_page() -> None:
     config_page.render()
 
 
-def _tighten_top_spacing() -> None:
-    """メインコンテナ上部の余白を詰めて、全体を少し上に寄せる。
-
-    Streamlit 既定の .block-container は上パディングが大きく、「データ最終更新」表記の
-    上に空白ができてしまうため、padding-top を縮める（見た目のみの調整）。
-    """
-    st.markdown(
-        "<style>"
-        "[data-testid='stMainBlockContainer'],"
-        "[data-testid='stAppViewBlockContainer'],"
-        ".block-container{padding-top:1.5rem;}"
-        "</style>",
-        unsafe_allow_html=True,
-    )
-
-
 def main() -> None:
     st.set_page_config(page_title="店舗周辺マップ", layout="wide")
-    _tighten_top_spacing()
     _render_last_updated()  # 共通: 両ページの上部に表示
     pages = [
         st.Page(_map_page, title="マップ", default=True),
