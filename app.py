@@ -30,7 +30,16 @@ def _render_last_updated() -> None:
     except Exception as e:  # noqa: BLE001
         logger.warning("テーブル更新日時の取得に失敗: %s", e)
         ts = None
-    st.caption(f"データ最終更新: {ts}（JST）" if ts else "データ最終更新: 取得できませんでした")
+    text = f"データ最終更新: {ts}（JST）" if ts else "データ最終更新: 取得できませんでした"
+    # 同じ行の左端にページ側のアクション（例: マップをリセット）、右端に更新日時を横並びで
+    # 置けるよう列を確保する。左列のコンテナを session_state 経由でページへ渡し、縦の余白を
+    # 1行分詰める。該当アクションが無いページ・状態では左列は空のまま（見た目に影響なし）。
+    col_action, col_caption = st.columns([1, 4], vertical_alignment="center")
+    col_caption.markdown(
+        f"<div style='text-align:right;color:#6B7280;font-size:0.875rem;'>{text}</div>",
+        unsafe_allow_html=True,
+    )
+    st.session_state["_top_action_slot"] = col_action
 
 
 def _map_page() -> None:
@@ -50,8 +59,25 @@ def _config_page() -> None:
     config_page.render()
 
 
+def _tighten_top_spacing() -> None:
+    """メインコンテナ上部の余白を詰めて、全体を少し上に寄せる。
+
+    Streamlit 既定の .block-container は上パディングが大きく、「データ最終更新」表記の
+    上に空白ができてしまうため、padding-top を縮める（見た目のみの調整）。
+    """
+    st.markdown(
+        "<style>"
+        "[data-testid='stMainBlockContainer'],"
+        "[data-testid='stAppViewBlockContainer'],"
+        ".block-container{padding-top:1.5rem;}"
+        "</style>",
+        unsafe_allow_html=True,
+    )
+
+
 def main() -> None:
     st.set_page_config(page_title="店舗周辺マップ", layout="wide")
+    _tighten_top_spacing()
     _render_last_updated()  # 共通: 両ページの上部に表示
     pages = [
         st.Page(_map_page, title="マップ", default=True),

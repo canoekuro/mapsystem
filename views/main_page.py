@@ -385,9 +385,12 @@ def render(companies: list[str]) -> None:
         srow = store_rows.iloc[0]
         fac = filter_facilities(df, store, loaded_fetch_radius)
 
-        # マップを誤って操作した場合に初期表示へ戻すリセット（紫帯の上に配置）。
+        # マップを誤って操作した場合に初期表示へ戻すリセット。縦の余白を詰めるため、
+        # 「データ最終更新」キャプションと同じ行の右列（app.py が確保）へ横並びで配置する。
+        # スロットが無い場合（想定外）は従来どおり本文へフォールバックする。
         # st_folium の key を変えると再マウントされ、build_map の初期位置/ズームに戻る。
-        if st.button("マップをリセット", key="reset_map"):
+        reset_slot = st.session_state.get("_top_action_slot") or st
+        if reset_slot.button("マップをリセット", key="reset_map", use_container_width=True):
             st.session_state["map_nonce"] = st.session_state.get("map_nonce", 0) + 1
         nonce = st.session_state.get("map_nonce", 0)
 
