@@ -13,7 +13,7 @@ no browser and no extra heavy package — container start stays fast.
 
 Public API
 ----------
-render_static_map(store_row, facilities_df, radius_km, size=656) -> bytes
+render_static_map(store_row, facilities_df, radius_km, width=656, height=656) -> bytes
 """
 
 import io
@@ -68,14 +68,14 @@ def _font(size: int) -> ImageFont.FreeTypeFont:
     return ImageFont.truetype(_FONT_PATH, size)
 
 
-def _draw_attribution(draw: ImageDraw.ImageDraw, size: int, text: str) -> None:
+def _draw_attribution(draw: ImageDraw.ImageDraw, width: int, height: int, text: str) -> None:
     """タイル提供元の帰属表示を地図右下に描画する（OSM/GSI/CARTO とも必須）。"""
     font = _font(11)
     pad = 4
     tw = draw.textlength(text, font=font)
     th = 13
-    x1 = size - 6
-    y1 = size - 6
+    x1 = width - 6
+    y1 = height - 6
     x0 = x1 - tw - pad * 2
     y0 = y1 - th - pad * 2
     draw.rectangle([x0, y0, x1, y1], fill=_ATTR_BG)
@@ -123,13 +123,23 @@ def _fetch_tile(z: int, x: int, y: int, url_template: str) -> bytes:
 
 # --- Rendering --------------------------------------------------------------
 
-def render_static_map(store_row, facilities_df, radius_km: float, size: int = 656) -> bytes:
+def render_static_map(
+    store_row,
+    facilities_df,
+    radius_km: float,
+    width: int = 656,
+    height: int = 656,
+) -> bytes:
     """
-    Render a size x size PNG centered on the store (SPEC §6.1.2 map area).
+    Render a *width* x *height* PNG centered on the store (SPEC §6.1.2 map area).
 
     Draws OSM base tiles, the radius circle, the store marker, and numbered
     facility markers.  Tile-fetch failures propagate so callers can skip the
     store (SPEC §11).
+
+    寸法は既定で正方（656×656）だが、対話地図（``lib.map_builder.build_map`` の
+    ``map_width×map_height``）と体裁を合わせるため width/height を個別指定できる。
+    表示ズームは対話地図と同じく縦の見付（height）を基準に算出する（issue 202607221245）。
     """
     clat = float(store_row["店舗lat"])
     clon = float(store_row["店舗lon"])
@@ -139,23 +149,25 @@ def render_static_map(store_row, facilities_df, radius_km: float, size: int = 65
     # 表示ズーム（半径円が枠内に収まるズーム）と、タイル取得ズーム（情報粒度）を分離する。
     # 粒度が 15 以上になるときは 14 で頭打ちにし、14 相当タイルを scale 倍に拡大して用いる。
     # PNG では取得ズームを抑えるだけで枠取り（表示ズーム）は維持する（SPEC §6.1.2 追補）。
-    z_display = zoom_for_radius(radius_km, clat, viewport_px=size, max_zoom=bm["max_zoom"])
+    # 対話地図 build_map と一致させるため viewport は縦（height）を用いる。
+    z_display = zoom_for_radius(radius_km, clat, viewport_px=height, max_zoom=bm["max_zoom"])
     z_native = min(z_display, _DETAIL_ZOOM_CAP)
     scale = 2 ** (z_display - z_native)  # 1, 2, 4, ...（14 以下なら 1＝従来通り）
     n_tiles = 2 ** z_native
 
-    # 表示（z_display）グローバル画素での窓。オーバーレイ（円・マーカー・凡例）に使う。
+    # 表示（z_display）グローバル画素での窓。オーバーレイ（円・マーカー）に使う。
     cxd, cyd = _project(clat, clon, z_display)
-    left = cxd - size / 2.0
-    top = cyd - size / 2.0
+    left = cxd - width / 2.0
+    top = cyd - height / 2.0
 
     # 取得（z_native）グローバル画素での窓。scale で表示窓と厳密対応する（left = scale * left_n）。
-    native_size = size / scale
+    native_w = width / scale
+    native_h = height / scale
     cxn, cyn = _project(clat, clon, z_native)
-    left_n = cxn - native_size / 2.0
-    top_n = cyn - native_size / 2.0
-    right_n = cxn + native_size / 2.0
-    bottom_n = cyn + native_size / 2.0
+    left_n = cxn - native_w / 2.0
+    top_n = cyn - native_h / 2.0
+    right_n = cxn + native_w / 2.0
+    bottom_n = cyn + native_h / 2.0
 
     # 取得窓を覆う整数の native 画素ボックス（拡大後に表示窓を正確に切り出せるよう 1px 余白）。
     nx0 = math.floor(left_n) - 1
@@ -193,7 +205,7 @@ def render_static_map(store_row, facilities_df, radius_km: float, size: int = 65
         sub = sub.resize(((nx1 - nx0) * scale, (ny1 - ny0) * scale))
     off_x = int(round(left - nx0 * scale))
     off_y = int(round(top - ny0 * scale))
-    base = sub.crop((off_x, off_y, off_x + size, off_y + size)).convert("RGBA")
+    base = sub.crop((off_x, off_y, off_x + width, off_y + height)).convert("RGBA")
 
     def to_px(lat: float, lon: float) -> tuple[float, float]:
         gx, gy = _project(lat, lon, z_display)
@@ -242,7 +254,7 @@ def render_static_map(store_row, facilities_df, radius_km: float, size: int = 65
     # 凡例は廃止（区分色分けをやめ単一色で描画するため, issue 202607161811）。
 
     # --- Tile attribution (提供元の帰属表示、右下) ---
-    _draw_attribution(draw, size, bm["attribution"])
+    _draw_attribution(draw, width, height, bm["attribution"])
 
     out = io.BytesIO()
     base.convert("RGB").save(out, format="PNG")

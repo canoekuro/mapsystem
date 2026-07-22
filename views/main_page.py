@@ -39,12 +39,14 @@ _PPTX_MIME = (
 
 
 # df is excluded from the cache key (hash_funcs returns None): the store's map is
-# uniquely determined by (store, radius) within the already-fetched df.
+# uniquely determined by (store, radius, width, height) within the already-fetched df.
 @st.cache_data(show_spinner="地図を生成中...", hash_funcs={pd.DataFrame: lambda _df: None})
-def _store_map_png(df: pd.DataFrame, store: str, radius: float) -> bytes:
+def _store_map_png(df: pd.DataFrame, store: str, radius: float, width: int, height: int) -> bytes:
+    # 対話地図（build_map）と体裁を合わせるため map_width×map_height で生成する
+    # （issue 202607221245）。width/height はキャッシュキーに含める。
     srow = df[df["店舗名称"] == store].iloc[0]
     fac = filter_facilities(df, store, radius)
-    return render_static_map(srow, fac, radius)
+    return render_static_map(srow, fac, radius, width=width, height=height)
 
 
 # 商談用資料 / 店舗POP の pptx。地図PNG（_store_map_png）を使い回し、テンプレ種別ごとに
@@ -307,25 +309,15 @@ def render(companies: list[str]) -> None:
         _data_source_caption()
         return
 
-    # --- データダウンロード（expander）: 小売店選択より上に配置 ---
-    # 取得済みDF全体（= 企業全体・取得半径以内）を対象に出力する。都道府県での絞り込みは
-    # 廃止した（issue 202607221128）。
+    # ダウンロード系ボタンは sidebar へ移動した（issue 202607221245、折りたたみは廃止）。
+    # ここでは企業全体（取得半径以内）のローデータCSVを用意しておく（sidebar で使用）。
     company = loaded_company
     radius = loaded_fetch_radius
-    with st.expander("データダウンロード", expanded=False):
-        # ローデータダウンロード（企業全体・取得半径以内を単一CSV cp932 で直接生成）
-        _csv = (
-            filter_company(df, company, radius)
-            .to_csv(index=False)
-            .encode("cp932", errors="replace")
-        )
-        st.download_button(
-            "ローデータダウンロード",
-            data=_csv,
-            file_name=f"{company}_{radius}km.csv",
-            mime="text/csv",
-            use_container_width=True,
-        )
+    rawdata_csv = (
+        filter_company(df, company, radius)
+        .to_csv(index=False)
+        .encode("cp932", errors="replace")
+    )
 
     # --- 表示行（取得後のみ）: 都道府県 + 小売店 ---
     # 絞り込み順は 企業 → 取得半径 →（データ取得）→ 都道府県 → 小売店名称。
@@ -358,6 +350,10 @@ def render(companies: list[str]) -> None:
         )
 
     st.divider()
+
+    # 選択中1店舗の地図PNG（商談用資料/店舗POP pptx 用）。店舗未選択・圏内0件では None。
+    # sidebar のダウンロードボタンで使用する（issue 202607221245）。
+    selected_map_png: bytes | None = None
 
     # --- 地図＋施設リスト ---
     # 表示半径は廃止し、取得半径（loaded_fetch_radius）をそのまま表示に用いる。
@@ -400,26 +396,11 @@ def render(companies: list[str]) -> None:
                 height=map_height(),
                 key=f"map_{store}_{loaded_fetch_radius}_{nonce}",
             )
-            # 商談用資料 / 店舗POP の pptx ダウンロード（選択中の1店舗・地図画像を貼付）。
-            # 地図PNGは1回だけ生成し、両テンプレで使い回す（issue 202607221128）。
-            map_png = _store_map_png(df, store, loaded_fetch_radius)
-            dl_shoudan, dl_pop = st.columns(2)
-            with dl_shoudan:
-                st.download_button(
-                    "商談用資料ダウンロード",
-                    data=_store_pptx(map_png, "shoudan"),
-                    file_name=f"{store}_商談用資料.pptx",
-                    mime=_PPTX_MIME,
-                    use_container_width=True,
-                )
-            with dl_pop:
-                st.download_button(
-                    "店舗POPダウンロード",
-                    data=_store_pptx(map_png, "pop"),
-                    file_name=f"{store}_店舗POP.pptx",
-                    mime=_PPTX_MIME,
-                    use_container_width=True,
-                )
+            # 商談用資料 / 店舗POP の pptx 用に、対話地図と同寸（map_width×map_height）の
+            # 地図PNGを1回だけ生成し sidebar のボタンで使い回す（issue 202607221245）。
+            selected_map_png = _store_map_png(
+                df, store, loaded_fetch_radius, map_width(), map_height()
+            )
         with col_list:
             st.markdown(_facility_list_html(fac), unsafe_allow_html=True)
             # 施設リストの下に出荷実績（当年実績ケース数・前年比）のダミー枠を表示（part6）。
@@ -430,15 +411,69 @@ def render(companies: list[str]) -> None:
 
     # --- 店舗別 推進園数サマリ（出典表示の下, part1）---
     # 小売店マスタ（企業全体の全店舗）に、取得半径圏内の推進園数を left join。圏内0件の
-    # 店舗も 推進園数=0 で残る（issue 202607221128）。
+    # 店舗も 推進園数=0 で残る（issue 202607221128）。表はここに表示し、ダウンロードは sidebar。
     summary = store_nursery_counts(stores_df, df)
     st.markdown("##### 店舗別 推進園数")
     st.dataframe(summary, use_container_width=True, hide_index=True)
-    _summary_csv = summary.to_csv(index=False).encode("cp932", errors="replace")
-    st.download_button(
-        "店舗別推進園数ダウンロード",
-        data=_summary_csv,
-        file_name=f"{loaded_company}_{loaded_fetch_radius}km_店舗別推進園数.csv",
-        mime="text/csv",
-        use_container_width=True,
+    summary_csv = summary.to_csv(index=False).encode("cp932", errors="replace")
+
+    # --- ダウンロード（sidebar へ集約, issue 202607221245）---
+    _render_sidebar_downloads(
+        company=loaded_company,
+        radius=loaded_fetch_radius,
+        store=store,
+        rawdata_csv=rawdata_csv,
+        summary_csv=summary_csv,
+        map_png=selected_map_png,
     )
+
+
+def _render_sidebar_downloads(
+    company: str,
+    radius: float,
+    store: str | None,
+    rawdata_csv: bytes,
+    summary_csv: bytes,
+    map_png: bytes | None,
+) -> None:
+    """ダウンロード系ボタンを sidebar にまとめて配置する（issue 202607221245）。
+
+    ローデータ・店舗別推進園数は企業全体（取得半径以内）が対象。商談用資料・店舗POP は
+    選択中の1店舗が対象で、店舗未選択／圏内推進園0件（*map_png* が None）のときは無効化する。
+    """
+    with st.sidebar:
+        st.markdown("### ダウンロード")
+        st.download_button(
+            "ローデータダウンロード",
+            data=rawdata_csv,
+            file_name=f"{company}_{radius}km.csv",
+            mime="text/csv",
+            use_container_width=True,
+        )
+        st.download_button(
+            "店舗別推進園数ダウンロード",
+            data=summary_csv,
+            file_name=f"{company}_{radius}km_店舗別推進園数.csv",
+            mime="text/csv",
+            use_container_width=True,
+        )
+
+        pptx_disabled = map_png is None
+        if pptx_disabled:
+            st.caption("小売店を選択すると商談用資料・店舗POPを出力できます")
+        st.download_button(
+            "商談用資料ダウンロード",
+            data=_store_pptx(map_png, "shoudan") if not pptx_disabled else b"",
+            file_name=f"{store}_商談用資料.pptx",
+            mime=_PPTX_MIME,
+            disabled=pptx_disabled,
+            use_container_width=True,
+        )
+        st.download_button(
+            "店舗POPダウンロード",
+            data=_store_pptx(map_png, "pop") if not pptx_disabled else b"",
+            file_name=f"{store}_店舗POP.pptx",
+            mime=_PPTX_MIME,
+            disabled=pptx_disabled,
+            use_container_width=True,
+        )

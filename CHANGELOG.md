@@ -6,6 +6,17 @@ All notable changes to this project are documented in this file.
 
 ### 2026-07-22
 
+- feat: アップロード拡張・DLボタンのsidebar集約・企業名称のstore_table化・map/pptx体裁一致（issue 202607221245）。
+  - データ更新で `.xls` も受理（`views/upload_page.py`）。保存名はアップロードの拡張子を保持
+    （`nursery.<ext>` / `store.<ext>`）。
+  - ダウンロード系4ボタン（ローデータ／店舗別推進園数／商談用資料／店舗POP）を sidebar へ集約し、
+    「データダウンロード」`st.expander` を廃止（`views/main_page.py`）。
+  - 最初の企業名称候補を小売店マスタ（`store_table`）から取得（`lib/data.load_company_names`）。
+  - pptx 埋め込み画像を対話地図と一致させる。`lib/static_map.render_static_map` を width×height 対応に
+    一般化し `map_width×map_height`・viewport=縦 で生成。`lib/pptx_builder.build_store_pptx` を
+    アスペクト保持の `add_picture` 主体に変更（`insert_picture` のクロップを回避）。
+    [詳細](docs/history/20260722-040906-issue-upload-sidebar-map-consistency-plan.md)
+
 - feat: 小売店マスタの分離とマップpptx出力（issue 202607221128）。
   - 小売店マスタ（`[databricks] store_table`）を取得半径に依存せず取得し、小売店名称・都道府県の
     選択肢と店舗別推進園数の集計表の土台に使用。圏内推進園0件の店舗も候補・集計表に残り、
