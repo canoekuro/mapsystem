@@ -31,11 +31,14 @@ def _render_last_updated() -> None:
         logger.warning("テーブル更新日時の取得に失敗: %s", e)
         ts = None
     text = f"データ最終更新: {ts}（JST）" if ts else "データ最終更新: 取得できませんでした"
-    # キャプションと同じ行の右側に、ページ側のアクション（例: マップをリセット）を横並びで
-    # 置けるよう列を確保する。2列目のコンテナを session_state 経由でページへ渡し、縦の余白を
-    # 1行分詰める。該当アクションが無いページ・状態では右列は空のまま（見た目に影響なし）。
-    col_caption, col_action = st.columns([4, 1], vertical_alignment="center")
-    col_caption.caption(text)
+    # 同じ行の左端にページ側のアクション（例: マップをリセット）、右端に更新日時を横並びで
+    # 置けるよう列を確保する。左列のコンテナを session_state 経由でページへ渡し、縦の余白を
+    # 1行分詰める。該当アクションが無いページ・状態では左列は空のまま（見た目に影響なし）。
+    col_action, col_caption = st.columns([1, 4], vertical_alignment="center")
+    col_caption.markdown(
+        f"<div style='text-align:right;color:#6B7280;font-size:0.875rem;'>{text}</div>",
+        unsafe_allow_html=True,
+    )
     st.session_state["_top_action_slot"] = col_action
 
 
