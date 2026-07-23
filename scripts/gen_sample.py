@@ -148,6 +148,17 @@ for company_info in COMPANIES:
         store_address = store["address"]
         store_pref = store["pref"]
 
+        # 企業G名称・出荷実績は店舗単位で一定（issue 202607231113）。当年/前年実績（箱数）と
+        # 前年比（＝当年/前年の比率。表示側で ×100 して % 表記にする）。
+        company_group = f"{company}グループ"
+        sales: dict = {}
+        for product in ("プラズマ計", "おい免", "ムテキッズ"):
+            prev_boxes = random.randint(50, 500)
+            curr_boxes = round(prev_boxes * random.uniform(0.7, 1.4))
+            sales[f"{product}_当年実績（箱数）"] = curr_boxes
+            sales[f"{product}_前年実績（箱数）"] = prev_boxes
+            sales[f"{product}_前年比"] = round(curr_boxes / prev_boxes, 3)
+
         n_facilities = random.randint(14, 24)
 
         for _ in range(n_facilities):
@@ -179,6 +190,7 @@ for company_info in COMPANIES:
 
             rows.append(
                 {
+                    "企業G名称": company_group,
                     "企業名称": company,
                     "業態名称": fmt,
                     "店舗コード": code,
@@ -187,6 +199,7 @@ for company_info in COMPANIES:
                     "店舗住所": store_address,
                     "店舗lat": store_lat,
                     "店舗lon": store_lon,
+                    **sales,
                     "推進園名称": fac_name,
                     "推進園区分": category,
                     "推進園_都道府県": store_pref,

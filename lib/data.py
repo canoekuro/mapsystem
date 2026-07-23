@@ -6,6 +6,7 @@ Functions
 load_company_names()                   -- cached lightweight distinct 企業名称 loader
 load_filtered()                        -- fetch one company within fetch radius (Spark-side filter)
 load_stores()                          -- fetch the store master for one company (no radius filter)
+load_shipment_period()                 -- 出荷実績の対象期間文字列（rdp_update.toml から）
 store_names(df)                        -- unique store names (sorted)
 company_names(df)                      -- unique company names (sorted)
 filter_facilities()                    -- filter by store + radius, add 連番
@@ -14,14 +15,34 @@ store_count_for_company_prefectures()  -- store count for company + prefecture s
 zoom_for_radius()                      -- zoom level that keeps the radius circle in view
 """
 
+import logging
 import math
+import re
 import tomllib
 
 import pandas as pd
 import streamlit as st
 
+logger = logging.getLogger(__name__)
+
 _COLUMN_MAPPING_PATH = "config/column_mapping.toml"
 _DATABRICKS_CONFIG_PATH = "config/databricks_config.toml"
+
+# 出荷実績（3商材 × 3指標）の列（アプリ内部名＝テーブル列名, issue 202607231113）。
+# マップ画面の出荷実績テーブル・店舗別 推進園数テーブルで共有する。
+SALES_PRODUCTS = ("プラズマ計", "おい免", "ムテキッズ")
+SALES_METRICS = ("当年実績（箱数）", "前年実績（箱数）", "前年比")
+
+
+def sales_column(product: str, metric: str) -> str:
+    """商材名と指標名から実績列名（例: ``プラズマ計_前年比``）を組み立てる。"""
+    return f"{product}_{metric}"
+
+
+# 実績9列の一覧（商材ごとに 当年実績 → 前年実績 → 前年比 の順）。
+SALES_COLUMNS: list[str] = [
+    sales_column(p, m) for p in SALES_PRODUCTS for m in SALES_METRICS
+]
 
 
 def _load_column_mapping() -> dict[str, str]:
@@ -42,6 +63,74 @@ def _load_databricks_config() -> dict:
         return data.get("databricks", {})
     except FileNotFoundError:
         return {}
+
+
+def _load_rdp_config() -> dict:
+    """Load the [rdp] section from config/databricks_config.toml (出荷実績期間ファイル)."""
+    try:
+        with open(_DATABRICKS_CONFIG_PATH, "rb") as f:
+            data = tomllib.load(f)
+        return data.get("rdp", {})
+    except FileNotFoundError:
+        return {}
+
+
+# 出荷実績期間ファイルの「（開始 ～ 終了）」を取り出す正規表現（全角/半角の波ダッシュ両対応）。
+# 値がクォートされておらず TOML として不正なため tomllib ではなく正規表現で解析する。
+_PERIOD_RE = re.compile(r"（\s*(.+?)\s*[～~]\s*(.+?)\s*）")
+
+
+def _read_rdp_update_text() -> str | None:
+    """rdp_update.toml の中身（文字列）を返す。Volume 優先・失敗時ローカルfallback。
+
+    ``pptx_builder.load_template_bytes`` と同じ WorkspaceClient パターンで Volume から
+    ``[rdp] update_toml_path`` を取得し、失敗した場合は ``local_fallback`` をローカルで読む。
+    どちらも取得できない場合は None。
+    """
+    config = _load_rdp_config()
+    path = config.get("update_toml_path", "")
+    local_fallback = config.get("local_fallback", "")
+
+    if path:
+        try:
+            from databricks.sdk import WorkspaceClient  # noqa: PLC0415
+
+            w = WorkspaceClient()
+            resp = w.files.download(path)
+            return resp.contents.read().decode("utf-8")
+        except Exception as e:  # noqa: BLE001
+            logger.warning(
+                "Volume からの rdp_update.toml 取得に失敗（%s）。ローカルfallbackを使用: %s",
+                path,
+                e,
+            )
+
+    if local_fallback:
+        try:
+            with open(local_fallback, encoding="utf-8") as f:
+                return f.read()
+        except OSError as e:
+            logger.warning("rdp_update.toml のローカル読込に失敗（%s）: %s", local_fallback, e)
+    return None
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def load_shipment_period() -> str | None:
+    """出荷実績の対象期間文字列（例 ``2026年06月～2026年06月``）を返す。取得不可時は None。
+
+    データ更新ジョブが Volume へ書き出す ``rdp_update.toml``
+    （``プラズマドライ計 = 期間①（YYYY年MM月 ～ YYYY年MM月）``）から、プラズマ（先頭行）の
+    期間を取り出す。プラズマ・おい免・ムテキッズは同一日時想定のためプラズマのみ使用する
+    （issue 202607231113）。短い TTL でキャッシュし、更新後に追随する。
+    """
+    text = _read_rdp_update_text()
+    if not text:
+        return None
+    m = _PERIOD_RE.search(text)
+    if not m:
+        logger.warning("rdp_update.toml から期間を解析できませんでした")
+        return None
+    return f"{m.group(1).strip()}～{m.group(2).strip()}"
 
 
 def _table_and_spark(key: str = "table"):
@@ -158,9 +247,10 @@ def load_filtered(company: str, fetch_radius_km: float) -> pd.DataFrame:
 def load_stores(company: str) -> pd.DataFrame:
     """Fetch the store master rows for one *company* from ``store_table``.
 
-    小売店マスタ（企業名称/店舗名称/店舗コード/店舗_都道府県 の DISTINCT）を企業で
-    絞って取得する。``load_filtered`` が距離で削るのと異なり距離条件を課さないため、
-    圏内推進園0件の店舗も残る。これを選択肢・下部集計表の土台に使う（issue 202607221128）。
+    小売店マスタ（企業G名称/企業名称/店舗名称/店舗コード/店舗_都道府県 ＋ 出荷実績9列 の
+    DISTINCT）を企業で絞って取得する。``load_filtered`` が距離で削るのと異なり距離条件を
+    課さないため、圏内推進園0件の店舗も残る。これを選択肢・下部集計表の土台に使う
+    （issue 202607221128）。出荷実績は店舗別 推進園数テーブルへ載せる（issue 202607231113）。
     Cached by *company*.
     """
     from pyspark.sql import functions as F  # noqa: PLC0415
@@ -169,7 +259,10 @@ def load_stores(company: str) -> pd.DataFrame:
     company_col = mapping.get("企業名称", "企業名称")
     select_cols = [
         mapping.get(c, c)
-        for c in ("企業名称", "店舗名称", "店舗コード", "店舗_都道府県")
+        for c in (
+            "企業G名称", "企業名称", "店舗名称", "店舗コード", "店舗_都道府県",
+            *SALES_COLUMNS,
+        )
     ]
 
     table_name, spark = _table_and_spark(key="store_table")
@@ -268,13 +361,16 @@ def store_nursery_counts(
     推進園数は *nursery_df* から ``COUNT(DISTINCT 推進園名称)`` を店舗キーで集計し、
     小売店マスタへ **left join** して埋める。圏内0件の店舗も残り、推進園数は 0 になる
     （issue 202607221128: 圏内0件の店舗が集計表から消える問題の解消）。
-    列は 店舗名称 / 店舗コード / 店舗_都道府県 / 推進園数。
+    列は 店舗名称 / 店舗コード / 店舗_都道府県 / 推進園数 ＋ 出荷実績9列（存在する分のみ,
+    issue 202607231113）。出荷実績は店舗単位で一意のため小売店マスタから持ち込む。
     """
     cols = ["店舗名称", "店舗コード", "店舗_都道府県"]
+    # 実績列は小売店マスタに存在する分のみ載せる（サンプルデータ等で欠けても壊れない）。
+    sales_cols = [c for c in SALES_COLUMNS if c in stores_df.columns]
     if stores_df.empty:
-        return pd.DataFrame(columns=[*cols, "推進園数"])
+        return pd.DataFrame(columns=[*cols, "推進園数", *sales_cols])
 
-    base = stores_df[cols].drop_duplicates()
+    base = stores_df[[*cols, *sales_cols]].drop_duplicates(subset=cols)
     if nursery_df.empty:
         counts = pd.DataFrame(columns=[*cols, "推進園数"])
     else:
@@ -285,6 +381,8 @@ def store_nursery_counts(
         )
     merged = base.merge(counts, on=cols, how="left")
     merged["推進園数"] = merged["推進園数"].fillna(0).astype(int)
+    # 列順: 店舗キー → 推進園数 → 実績9列。
+    merged = merged[[*cols, "推進園数", *sales_cols]]
     return merged.sort_values(["店舗名称", "店舗コード"]).reset_index(drop=True)
 
 

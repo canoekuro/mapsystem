@@ -7,6 +7,14 @@ table = "kh_aigrd_databricks_prd_01.default.immune_promo_nursery"
 # 小売店マスタテーブル（企業名称/店舗名称/店舗コード/店舗_都道府県 の DISTINCT）。
 store_table = "kh_aigrd_databricks_prd_01.default.immune_promo_store"
 
+# 出荷実績の対象期間ファイル（issue 202607231113）。
+# データ更新ジョブが「プラズマドライ計 = 期間①（YYYY年MM月 ～ YYYY年MM月）」形式で書き出す。
+# マップ画面の出荷実績テーブルの「出荷実績　期間：」表記に用いる（プラズマの日付のみ使用）。
+[rdp]
+update_toml_path = "/Volumes/kh_aigrd_databricks_prd_01/default/immune_promo_nursery/rdp_update.toml"
+# Databricks にアクセスできないときのフォールバック（リポジトリ同梱）
+local_fallback = "docs/issues/rdp_update.toml"
+
 # データ更新（アップロード）機能の格納先 Volume フォルダ。
 [volume]
 nursery_dir = "/Volumes/kh_aigrd_databricks_prd_01/default/immune_promo_nursery/data"

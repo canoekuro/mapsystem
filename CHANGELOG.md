@@ -4,6 +4,18 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+### 2026-07-23
+
+- feat: 列名変更対応と出荷実績の表示（issue 202607231113）。実テーブルの `店舗コード`→`小売店CD`
+  改名を `config/column_mapping.toml` の右辺張替で吸収し、`企業G名称` と 3商材（プラズマ計 /
+  おい免 / ムテキッズ）× 当年実績（箱数）/ 前年実績（箱数）/ 前年比 の9列を追加。マップ画面の
+  出荷実績テーブル（`views/main_page.py:_sales_table_html`）を選択店舗の実データ（実績はDB値そのまま、
+  前年比は比率を ×100 して `%`）で表示し、右下の「出荷実績　期間：」を `rdp_update.toml`
+  （Volume、`lib.data.load_shipment_period`）から表示。店舗別 推進園数テーブルへ実績9列を追加
+  （`lib/data.store_nursery_counts` / `load_stores`）。`config/databricks_config.toml` に `[rdp]`、
+  `scripts/gen_sample.py`・`data/master.csv` を新スキーマへ更新、`SPEC.md` §4.2/§6.1.2 を改訂。
+  [詳細](docs/history/20260723-030008-issue-202607231113-plan.md)
+
 ### 2026-07-22
 
 - feat: マップを固定画面化し「マップをリセット」ボタンを廃止。`lib/map_builder.py` の

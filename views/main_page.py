@@ -15,6 +15,7 @@ from streamlit_folium import st_folium
 from lib.colors import band_color, facility_color, map_height, map_width
 from lib.data import (
     load_filtered,
+    load_shipment_period,
     load_stores,
     load_table_last_updated_ts,
     stores_for_company,
@@ -192,16 +193,38 @@ def _facility_list_html(fac) -> str:
     return header + body
 
 
-# --- part6: 出荷実績（当年実績ケース数・前年比）テーブル ---------------------
-# NOTE: 実績・前年比の実データ源は未確定のため、現状は image1.png 準拠の「枠のみ」を
-# ダミー表示する（issue 202607161811）。実データ接続時は下記 _SALES_ROWS を廃し、
-# lib/data.py の新規データ源（店舗コード等をキーに結合）から値を差し込むこと。
-_SALES_ROWS = ("プラズマ計", "おい免", "ムテキッズ")
+# --- part6: 出荷実績（当年実績(箱数)・前年比）テーブル ------------------------
+# 選択中1店舗の出荷実績を image1.png 準拠の 2 値列（実績（箱数）/ 前年比（%））で表示する。
+# 値は load_filtered の店舗行（srow）から取り込む（issue 202607231113）。
+# 商材ラベル = 列接頭辞（プラズマ計 / おい免 / ムテキッズ, lib.data.SALES_PRODUCTS）。
 _SALES_PLACEHOLDER = "—"
 
 
-def _sales_table_html() -> str:
-    """出荷実績（実績(箱数)/前年比(%)）のダミー枠テーブル HTML を返す。"""
+def _fmt_boxes(value) -> str:
+    """実績（箱数）の表示。DB値をそのまま表示し、欠損は ``—``（issue 202607231113）。"""
+    if value is None or pd.isna(value):
+        return _SALES_PLACEHOLDER
+    return f"{value}"
+
+
+def _fmt_yoy(value) -> str:
+    """前年比の表示。DB は比率（例 1.053）なので ×100 して小数1桁＋``%``。欠損は ``—``。"""
+    if value is None or pd.isna(value):
+        return _SALES_PLACEHOLDER
+    try:
+        return f"{float(value) * 100:.1f}%"
+    except (TypeError, ValueError):
+        return _SALES_PLACEHOLDER
+
+
+def _sales_table_html(srow, period: str | None) -> str:
+    """選択店舗 *srow* の出荷実績テーブル HTML を返す（実績（箱数）/ 前年比（%））。
+
+    *period* は出荷実績の対象期間文字列（``lib.data.load_shipment_period``）。None のときは
+    ``—`` を表示する。
+    """
+    from lib.data import SALES_PRODUCTS, sales_column  # noqa: PLC0415
+
     head_bg = "#31597A"      # image1 のヘッダー帯（濃紺）
     label_bg = "#E9EDF1"     # 行見出しの薄灰
     cell_bg = "#F5F7F9"
@@ -219,21 +242,24 @@ def _sales_table_html() -> str:
     body_rows = "".join(
         "<tr>"
         f'<td style="background:{label_bg};border:1px solid {border};'
-        f'padding:6px 8px;font-size:13px;font-weight:bold;color:#111827;">{name}</td>'
+        f'padding:6px 8px;font-size:13px;font-weight:bold;color:#111827;">{product}</td>'
         f'<td style="background:{cell_bg};border:1px solid {border};'
-        f'padding:6px 8px;font-size:13px;text-align:center;color:#6B7280;">{_SALES_PLACEHOLDER}</td>'
+        'padding:6px 8px;font-size:13px;text-align:center;color:#111827;">'
+        f'{_fmt_boxes(srow.get(sales_column(product, "当年実績（箱数）")))}</td>'
         f'<td style="background:{cell_bg};border:1px solid {border};'
-        f'padding:6px 8px;font-size:13px;text-align:center;color:#6B7280;">{_SALES_PLACEHOLDER}</td>'
+        'padding:6px 8px;font-size:13px;text-align:center;color:#111827;">'
+        f'{_fmt_yoy(srow.get(sales_column(product, "前年比")))}</td>'
         "</tr>"
-        for name in _SALES_ROWS
+        for product in SALES_PRODUCTS
     )
+    period_text = period or _SALES_PLACEHOLDER
     return (
         '<div style="margin-top:12px;">'
         '<table style="border-collapse:collapse;width:100%;">'
         f"{header}{body_rows}"
         "</table>"
         '<div style="font-size:12px;color:#6B7280;margin-top:4px;text-align:right;">'
-        "出荷実績　期間：—"
+        f"出荷実績　期間：{period_text}"
         "</div>"
         "</div>"
     )
@@ -413,8 +439,11 @@ def render(companies: list[str]) -> None:
             )
         with col_list:
             st.markdown(_facility_list_html(fac), unsafe_allow_html=True)
-            # 施設リストの下に出荷実績（当年実績ケース数・前年比）のダミー枠を表示（part6）。
-            st.markdown(_sales_table_html(), unsafe_allow_html=True)
+            # 施設リストの下に選択店舗の出荷実績（当年実績（箱数）・前年比・対象期間）を表示（part6）。
+            st.markdown(
+                _sales_table_html(srow, load_shipment_period()),
+                unsafe_allow_html=True,
+            )
 
     # --- 店舗別 推進園数サマリ ---
     # 小売店マスタ（企業全体の全店舗）に、取得半径圏内の推進園数を left join。圏内0件の
