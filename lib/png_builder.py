@@ -182,7 +182,7 @@ def compose_canvas(
 
         # facility name (bold) + distance (muted)
         name = str(row["推進園名称"])
-        distance_text = f"約{row['距離km']:.2f}km"
+        distance_text = f"約{row['距離km']:.1f}km"
         draw.text(
             (text_x, cy - 9),
             name,

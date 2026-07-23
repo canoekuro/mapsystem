@@ -147,7 +147,7 @@ def build_map(store_row, facilities_df, radius_km: float) -> folium.Map:
         )
         folium.Marker(
             location=[row["推進園lat"], row["推進園lon"]],
-            tooltip=f"{number}. {facility_name}（{distance:.2f}km）",
+            tooltip=f"{number}. {facility_name}（{distance:.1f}km）",
             icon=icon,
         ).add_to(m)
 

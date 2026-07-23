@@ -1,11 +1,12 @@
 """
 データ更新（アップロード）ページ。
 
-推進園データ・店舗データの Excel（.xlsx / .xls）をアップロードし、「更新」押下で Unity Catalog
-Volume の所定フォルダへ格納する。各ファイルは固定のベース名（nursery / store）＋アップロード
-された拡張子（nursery.xlsx / nursery.xls など）に変換され、格納先フォルダ内の既存ファイルを
-置き換える。片方のみのアップロードにも対応し、その場合はその側のフォルダのみ更新する。
-テーブルの更新は Databricks ジョブ側で実行される。
+推進園データ・店舗データ・RDPデータの Excel（.xlsx / .xls）をアップロードし、「更新」押下で
+Unity Catalog Volume の所定フォルダへ格納する。各ファイルは固定のベース名（nursery / store /
+rdp）＋アップロードされた拡張子（nursery.xlsx / rdp.xls など）に変換され、格納先フォルダ内の
+同名（ベース名）ファイルを置き換える。削除は対象ベース名に限定するため、同一フォルダに複数
+ベース名が同居しても互いを消さない。一部のみのアップロードにも対応し、その場合はその側の
+ベース名のみ更新する。テーブルの更新は Databricks ジョブ側で実行される。
 
 Public API
 ----------
@@ -31,6 +32,7 @@ _ALLOWED_EXTS = ["xlsx", "xls"]
 _TARGETS = [
     ("推進園データ（xlsx/xls）", "nursery_dir", "nursery", "up_nursery"),
     ("店舗データ（xlsx/xls）", "store_dir", "store", "up_store"),
+    ("RDPデータ（xlsx/xls）", "rdp_dir", "rdp", "up_rdp"),
 ]
 
 
@@ -46,8 +48,8 @@ def render() -> None:
     """Render the data-upload page."""
     st.header("データ更新")
     st.info(
-        "推進園・店舗の Excel（.xlsx / .xls）をアップロードし「更新」を押すと Volume に格納されます"
-        "（既存ファイルは置き換え）。片方のみのアップロードも可能です。"
+        "推進園・店舗・RDP の Excel（.xlsx / .xls）をアップロードし「更新」を押すと Volume に"
+        "格納されます（同名ファイルは置き換え）。一部のみのアップロードも可能です。"
         "テーブルの更新は Databricks ジョブ側で実行されます。"
     )
 
@@ -79,7 +81,7 @@ def render() -> None:
 
             try:
                 filename = _stored_filename(base, file.name)
-                path = replace_in_volume(dir_path, filename, file.getvalue())
+                path = replace_in_volume(dir_path, filename, base, file.getvalue())
                 st.success(f"{label}: 格納しました → {path}")
             except Exception as e:  # noqa: BLE001
                 logger.exception("アップロードに失敗しました: %s", label)

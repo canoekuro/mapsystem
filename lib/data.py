@@ -4,8 +4,11 @@ Data access helpers — reads master data from Databricks Unity Catalog.
 Functions
 ---------
 load_company_names()                   -- cached lightweight distinct 企業名称 loader
+load_company_group_names()             -- cached lightweight distinct 企業G名称 loader (本部担当用)
 load_filtered()                        -- fetch one company within fetch radius (Spark-side filter)
+load_filtered_by_group()               -- fetch one 企業G within fetch radius (本部担当用)
 load_stores()                          -- fetch the store master for one company (no radius filter)
+load_stores_by_group()                 -- fetch the store master for one 企業G (本部担当用)
 load_shipment_period()                 -- 出荷実績の対象期間文字列（rdp_update.toml から）
 store_names(df)                        -- unique store names (sorted)
 company_names(df)                      -- unique company names (sorted)
@@ -275,6 +278,75 @@ def load_stores(company: str) -> pd.DataFrame:
     return _rename_to_app_columns(sdf.toPandas())
 
 
+@st.cache_data(show_spinner="企業Gを取得中...")
+def load_company_group_names() -> list[str]:
+    """Return the distinct 企業G名称 list from ``store_table`` (本部担当用ページ用).
+
+    ``load_company_names`` と同形の軽量クエリ。本部担当用ページの企業G選択肢に使う
+    （issue 202607231301）。全件はロードせず DISTINCT の企業G名称のみを取得する。
+    """
+    mapping = _load_column_mapping()
+    group_col = mapping.get("企業G名称", "企業G名称")
+
+    table_name, spark = _table_and_spark(key="store_table")
+    rows = spark.table(table_name).select(group_col).distinct().toPandas()
+    return sorted(rows[group_col].dropna().astype(str).tolist())
+
+
+@st.cache_data(show_spinner="小売店を取得中...")
+def load_stores_by_group(group: str) -> pd.DataFrame:
+    """Fetch the store master rows for one 企業G名称 *group* from ``store_table``.
+
+    ``load_stores`` の企業→企業G版（本部担当用ページ用, issue 202607231301）。
+    select列は ``load_stores`` と同じ（企業G名称/企業名称/店舗名称/店舗コード/店舗_都道府県 ＋
+    出荷実績9列 の DISTINCT）。企業Gは複数企業を跨ぐため、店舗別 推進園数表で企業名称を出せる。
+    Cached by *group*.
+    """
+    from pyspark.sql import functions as F  # noqa: PLC0415
+
+    mapping = _load_column_mapping()
+    group_col = mapping.get("企業G名称", "企業G名称")
+    select_cols = [
+        mapping.get(c, c)
+        for c in (
+            "企業G名称", "企業名称", "店舗名称", "店舗コード", "店舗_都道府県",
+            *SALES_COLUMNS,
+        )
+    ]
+
+    table_name, spark = _table_and_spark(key="store_table")
+    sdf = (
+        spark.table(table_name)
+        .where(F.col(group_col) == group)
+        .select(*select_cols)
+        .distinct()
+    )
+    return _rename_to_app_columns(sdf.toPandas())
+
+
+@st.cache_data(show_spinner="データを取得中...")
+def load_filtered_by_group(group: str, fetch_radius_km: float) -> pd.DataFrame:
+    """Fetch rows for one 企業G名称 *group* within *fetch_radius_km* from Databricks.
+
+    ``load_filtered`` の企業→企業G版（本部担当用ページ用, issue 202607231301）。
+    Spark-side filter: 企業G名称 == group AND 距離km <= fetch_radius_km.
+    Cached by (group, fetch_radius_km).
+    """
+    from pyspark.sql import functions as F  # noqa: PLC0415
+
+    mapping = _load_column_mapping()
+    group_col = mapping.get("企業G名称", "企業G名称")
+    distance_col = mapping.get("距離km", "距離km")
+
+    table_name, spark = _table_and_spark()
+    sdf = (
+        spark.table(table_name)
+        .where(F.col(group_col) == group)
+        .where(F.col(distance_col) <= float(fetch_radius_km))
+    )
+    return _rename_to_app_columns(sdf.toPandas())
+
+
 def store_names(df: pd.DataFrame) -> list[str]:
     """Return unique 店舗名称 values sorted ascending."""
     return sorted(df["店舗名称"].unique().tolist())
@@ -351,7 +423,9 @@ def filter_company(
 
 
 def store_nursery_counts(
-    stores_df: pd.DataFrame, nursery_df: pd.DataFrame
+    stores_df: pd.DataFrame,
+    nursery_df: pd.DataFrame,
+    include_company: bool = False,
 ) -> pd.DataFrame:
     """小売店マスタに圏内推進園数を left join した集計表を返す。
 
@@ -363,8 +437,13 @@ def store_nursery_counts(
     （issue 202607221128: 圏内0件の店舗が集計表から消える問題の解消）。
     列は 店舗名称 / 店舗コード / 店舗_都道府県 / 推進園数 ＋ 出荷実績9列（存在する分のみ,
     issue 202607231113）。出荷実績は店舗単位で一意のため小売店マスタから持ち込む。
+
+    *include_company* が True のとき先頭に 企業名称 列を加える（本部担当用ページ, issue
+    202607231301）。企業Gは複数企業を跨ぐため、店舗名称の衝突を避けるべく企業名称も
+    集計・結合キーに含める。
     """
-    cols = ["店舗名称", "店舗コード", "店舗_都道府県"]
+    lead_cols = ["企業名称"] if include_company else []
+    cols = [*lead_cols, "店舗名称", "店舗コード", "店舗_都道府県"]
     # 実績列は小売店マスタに存在する分のみ載せる（サンプルデータ等で欠けても壊れない）。
     sales_cols = [c for c in SALES_COLUMNS if c in stores_df.columns]
     if stores_df.empty:
@@ -381,9 +460,10 @@ def store_nursery_counts(
         )
     merged = base.merge(counts, on=cols, how="left")
     merged["推進園数"] = merged["推進園数"].fillna(0).astype(int)
-    # 列順: 店舗キー → 推進園数 → 実績9列。
+    # 列順: （企業名称）→ 店舗キー → 推進園数 → 実績9列。
     merged = merged[[*cols, "推進園数", *sales_cols]]
-    return merged.sort_values(["店舗名称", "店舗コード"]).reset_index(drop=True)
+    sort_cols = [*lead_cols, "店舗名称", "店舗コード"]
+    return merged.sort_values(sort_cols).reset_index(drop=True)
 
 
 # Web Mercator ground resolution at zoom 0, equator (meters/pixel for 256px tiles).
