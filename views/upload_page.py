@@ -48,9 +48,7 @@ def render() -> None:
     """Render the data-upload page."""
     st.header("データ更新")
     st.info(
-        "推進園・店舗・RDP の Excel（.xlsx / .xls）をアップロードし「更新」を押すと Volume に"
-        "格納されます（同名ファイルは置き換え）。一部のみのアップロードも可能です。"
-        "テーブルの更新は Databricks ジョブ側で実行されます。"
+        "Excelファイルをアップロードし「更新」を押すと ファイルがアップロードされ、データ更新が開始します。"
     )
 
     config = load_volume_config()
