@@ -12,11 +12,12 @@ Databricks Apps 上では WorkspaceClient() が自動的にクレデンシャル
 Functions
 ---------
 load_volume_config()  -- config/databricks_config.toml の [volume] セクションを返す
-replace_in_volume()   -- フォルダ内の既存ファイルを削除してから固定名でアップロード
+replace_in_volume()   -- フォルダ内の同名（ベース名）ファイルを削除してから固定名でアップロード
 """
 
 import io
 import logging
+import os
 import tomllib
 
 logger = logging.getLogger(__name__)
@@ -34,23 +35,29 @@ def load_volume_config() -> dict:
         return {}
 
 
-def replace_in_volume(dir_path: str, filename: str, data: bytes) -> str:
+def replace_in_volume(dir_path: str, filename: str, base: str, data: bytes) -> str:
     """
-    Delete every file in *dir_path*, then upload *data* as *filename*.
+    Delete existing ``{base}.*`` files in *dir_path*, then upload *data* as *filename*.
 
     Returns the full path the file was stored at.  The deletion is scoped to the
-    single folder passed in, so uploading only one side (推進園 / 店舗) leaves the
-    other folder untouched.  A missing folder (NotFound on listing) is ignored —
-    the upload below creates it.
+    target base name (e.g. ``rdp.xlsx`` / ``rdp.xls``), so multiple upload targets
+    (推進園 / 店舗 / RDP) can share the same folder without wiping each other —
+    uploading one base name leaves the other bases' files untouched.  A missing
+    folder (NotFound on listing) is ignored — the upload below creates it.
     """
     from databricks.sdk import WorkspaceClient  # noqa: PLC0415
 
     w = WorkspaceClient()
 
-    # 既存ファイルの削除（ディレクトリ未作成等は無視してアップロードへ進む）。
+    # 既存ファイルの削除は対象ベース名（{base}.拡張子）に一致するものだけに限定する。
+    # 同一フォルダに複数ベース名（nursery / store / rdp）が同居しても互いを消さない。
+    # ディレクトリ未作成等は無視してアップロードへ進む。
+    prefix = f"{base}."
     try:
         for entry in w.files.list_directory_contents(dir_path):
-            if not getattr(entry, "is_directory", False):
+            if getattr(entry, "is_directory", False):
+                continue
+            if os.path.basename(entry.path).startswith(prefix):
                 w.files.delete(entry.path)
                 logger.info("削除しました: %s", entry.path)
     except Exception as e:  # noqa: BLE001

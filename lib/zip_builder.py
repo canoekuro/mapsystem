@@ -6,6 +6,9 @@ Functions
 build_png_zip(df, store_names, radius_km, progress_cb=None)
     -- ZIP of per-store composite PNGs; failing stores are skipped and
        listed in errors.txt (SPEC §11).
+build_pptx_zip(files)
+    -- ZIP bundling already-built files (name -> bytes), e.g. 商談用資料 / 店舗POP
+       pptx を1クリックで両方DLするため（issue 202607231301）。
 """
 
 import io
@@ -76,6 +79,21 @@ def build_png_zip(
         if errors:
             zf.writestr("errors.txt", "\n".join(errors))
 
+    buf.seek(0)
+    return buf.getvalue()
+
+
+def build_pptx_zip(files: dict[str, bytes]) -> bytes:
+    """Bundle already-built files into a single ZIP (issue 202607231301).
+
+    *files* maps an in-archive filename to its byte contents, e.g.
+    ``{"店舗A_商談用資料.pptx": <bytes>, "店舗A_店舗POP.pptx": <bytes>}``.
+    Used to download 商談用資料 と 店舗POP together in one click.
+    """
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for name, content in files.items():
+            zf.writestr(name, content)
     buf.seek(0)
     return buf.getvalue()
 

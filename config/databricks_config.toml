@@ -16,9 +16,11 @@ update_toml_path = "/Volumes/kh_aigrd_databricks_prd_01/default/immune_promo_nur
 local_fallback = "docs/issues/rdp_update.toml"
 
 # データ更新（アップロード）機能の格納先 Volume フォルダ。
+# 削除はベース名（nursery / store / rdp）単位に限定するため、同一フォルダを共有してもよい。
 [volume]
 nursery_dir = "/Volumes/kh_aigrd_databricks_prd_01/default/immune_promo_nursery/data"
 store_dir = "/Volumes/kh_aigrd_databricks_prd_01/default/immune_promo_nursery/data"
+rdp_dir = "/Volumes/kh_aigrd_databricks_prd_01/default/immune_promo_nursery/data"
 
 # 商談用資料 / 店舗POP ダウンロードの PowerPoint テンプレート（issue 202607221128）。
 [pptx]

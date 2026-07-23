@@ -2,10 +2,12 @@
 Entrypoint for 店舗周辺マップ (Databricks Apps / Streamlit).
 
 Multipage:
-- マップ: company/store/radius selection, company-bulk downloads, map + facility
+- 店舗担当用: company/store/radius selection, company-bulk downloads, map + facility
   list, and a small data-source footer. Data is fetched on demand (only distinct
   company names load at startup).
-- データ更新: upload 推進園/店舗 Excel files to a Unity Catalog Volume.
+- 本部担当用: 企業G/radius selection; shows the per-store nursery-count table for the
+  whole company group (no map). Data is fetched on demand.
+- データ更新: upload 推進園/店舗/RDP Excel files to a Unity Catalog Volume.
 
 The upload page does not depend on the Databricks table query, so it stays usable
 even if company-name loading fails.
@@ -16,8 +18,12 @@ import logging
 import streamlit as st
 
 from lib.app_config import show_theme_page
-from lib.data import load_company_names, load_table_last_updated
-from views import config_page, main_page, upload_page
+from lib.data import (
+    load_company_group_names,
+    load_company_names,
+    load_table_last_updated,
+)
+from views import config_page, hq_page, main_page, upload_page
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -48,6 +54,15 @@ def _map_page() -> None:
     main_page.render(companies)
 
 
+def _hq_page() -> None:
+    try:
+        groups = load_company_group_names()
+    except Exception as e:  # noqa: BLE001
+        st.error(f"企業G名称の取得に失敗しました: {e}")
+        return
+    hq_page.render(groups)
+
+
 def _upload_page() -> None:
     upload_page.render()
 
@@ -60,7 +75,8 @@ def main() -> None:
     st.set_page_config(page_title="店舗周辺マップ", layout="wide")
     _render_last_updated()  # 共通: 両ページの上部に表示
     pages = [
-        st.Page(_map_page, title="マップ", default=True),
+        st.Page(_map_page, title="店舗担当用", default=True),
+        st.Page(_hq_page, title="本部担当用"),
         st.Page(_upload_page, title="データ更新"),
     ]
     # 「テーマ設定」ページは config/app_config.toml [ui] show_theme_page で出し分け（既定は非表示）。

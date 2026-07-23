@@ -6,6 +6,23 @@ All notable changes to this project are documented in this file.
 
 ### 2026-07-23
 
+- feat: RDPアップロード追加・DLボタン統合・本部担当用ページ新設・距離表示の桁数変更（issue 202607231301）。
+  (1) データ更新ページに RDP データのアップロード枠を追加し（`views/upload_page.py` の `_TARGETS`、
+  保存ベース名 `rdp`、格納先は他2ファイルと同一 Volume フォルダ `[volume] rdp_dir`）、
+  `lib/volume.replace_in_volume` の削除をフォルダ内全削除から**ベース名単位**（`{base}.*`）へ限定して
+  3ファイルが同一フォルダで共存できるようにした（同時アップロードで片方が消える潜在バグも解消）。
+  (2) 「商談用資料」「店舗POP」の2ダウンロードボタンを「商談資料・店舗POPダウンロード」1ボタンへ統合し、
+  押下で両 pptx を 1 つの ZIP（`{store}_商談資料・店舗POP.zip`）でまとめてダウンロード
+  （`lib/zip_builder.build_pptx_zip`、`views/main_page.py`）。
+  (3) 「マップ」ページを「店舗担当用」へ改称し、「本部担当用」ページ（`views/hq_page.py`）を新設。
+  企業G名称と半径を指定して取得すると、企業名称列を含む店舗別 推進園数の表を表示し CSV でDLできる
+  （マップなし）。`lib/data.py` に `load_company_group_names` / `load_stores_by_group` /
+  `load_filtered_by_group` を追加、`store_nursery_counts` に `include_company` を追加、`app.py` に
+  ページを登録。
+  (4) 施設リスト・地図ツールチップ・PNG出力の距離表示を小数2桁（約0.56km）から小数1桁（約0.6km）へ変更
+  （`views/main_page.py` / `lib/map_builder.py` / `lib/png_builder.py`）。`SPEC.md` §4.2/§6.1.2/§6.2/§7/§8.3/§8.4/§9 を改訂。
+  [詳細](docs/history/20260723-070500-issue-202607231301-plan.md)
+
 - feat: 列名変更対応と出荷実績の表示（issue 202607231113）。実テーブルの `店舗コード`→`小売店CD`
   改名を `config/column_mapping.toml` の右辺張替で吸収し、`企業G名称` と 3商材（プラズマ計 /
   おい免 / ムテキッズ）× 当年実績（箱数）/ 前年実績（箱数）/ 前年比 の9列を追加。マップ画面の

@@ -32,16 +32,13 @@ from lib.pptx_builder import (
     load_template_bytes,
 )
 from lib.static_map import render_static_map
+from lib.zip_builder import build_pptx_zip
 
 logger = logging.getLogger(__name__)
 
 # ページ遷移（st.navigation）を跨いで保持する入力ウィジェットの session_state キー。
 # 企業名称・取得半径・都道府県（表示行）・小売店名称。
 _INPUT_KEYS = ("mp_company", "mp_fetch_radius", "mp_pref", "mp_store")
-
-_PPTX_MIME = (
-    "application/vnd.openxmlformats-officedocument.presentationml.presentation"
-)
 
 
 # df is excluded from the cache key (hash_funcs returns None): the store's map is
@@ -137,7 +134,7 @@ def _facility_card_html(row) -> str:
         f'<div style="font-size:14px;font-weight:bold;color:#111827;'
         'white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'
         f"{name}</div>"
-        f'<div style="font-size:12px;color:#6B7280;">約{distance:.2f}km</div>'
+        f'<div style="font-size:12px;color:#6B7280;">約{distance:.1f}km</div>'
         "</div>"
     )
     # 罫線（カード下線）は削除（issue image2「枠線いらない」）。
@@ -491,22 +488,25 @@ def _render_sidebar_downloads(
 
         pptx_disabled = map_png is None
         if pptx_disabled:
-            st.caption("小売店を選択すると商談用資料・店舗POPを出力できます")
+            st.caption("小売店を選択すると商談資料・店舗POPを出力できます")
+        # 商談用資料・店舗POP は両方DLするユースケースが大半のため1ボタンに統合し、
+        # 押下で両pptxを1つのZIPにまとめてDLする（issue 202607231301）。
         # 定型文（データ更新日時を含む）は両テンプレ共通。ここで一度だけ組み立てる。
         captions = () if pptx_disabled else _store_captions(store)
+        if pptx_disabled:
+            zip_bytes = b""
+        else:
+            zip_bytes = build_pptx_zip(
+                {
+                    f"{store}_商談用資料.pptx": _store_pptx(map_png, "shoudan", captions),
+                    f"{store}_店舗POP.pptx": _store_pptx(map_png, "pop", captions),
+                }
+            )
         st.download_button(
-            "商談用資料ダウンロード",
-            data=_store_pptx(map_png, "shoudan", captions) if not pptx_disabled else b"",
-            file_name=f"{store}_商談用資料.pptx",
-            mime=_PPTX_MIME,
-            disabled=pptx_disabled,
-            use_container_width=True,
-        )
-        st.download_button(
-            "店舗POPダウンロード",
-            data=_store_pptx(map_png, "pop", captions) if not pptx_disabled else b"",
-            file_name=f"{store}_店舗POP.pptx",
-            mime=_PPTX_MIME,
+            "商談資料・店舗POPダウンロード",
+            data=zip_bytes,
+            file_name=f"{store}_商談資料・店舗POP.zip",
+            mime="application/zip",
             disabled=pptx_disabled,
             use_container_width=True,
         )
